@@ -22,11 +22,11 @@ func NewServer(s *store.ScheduleStore, addr string) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
-	mux.HandleFunc("GET /schedules", srv.handleList)
-	mux.HandleFunc("POST /schedules", srv.handleCreate)
-	mux.HandleFunc("GET /schedules/{id}", srv.handleGet)
-	mux.HandleFunc("PATCH /schedules/{id}", srv.handleUpdate)
-	mux.HandleFunc("DELETE /schedules/{id}", srv.handleDelete)
+	mux.HandleFunc("GET /api/v1/schedules", srv.handleList)
+	mux.HandleFunc("POST /api/v1/schedules", srv.handleCreate)
+	mux.HandleFunc("GET /api/v1/schedules/{id}", srv.handleGet)
+	mux.HandleFunc("PATCH /api/v1/schedules/{id}", srv.handleUpdate)
+	mux.HandleFunc("DELETE /api/v1/schedules/{id}", srv.handleDelete)
 
 	var h http.Handler = mux
 	h = loggingMiddleware(h)
