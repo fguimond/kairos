@@ -6,6 +6,7 @@
 *.dylib
 *.test
 *.prof
+kairos
 
 # Test artifacts (e.g., code coverage profiles)
 *.out
