@@ -1,0 +1,31 @@
+# Compiled binaries and object files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.prof
+
+# Test artifacts (e.g., code coverage profiles)
+*.out
+coverage.txt
+profile.cov
+
+# Dependency directories
+# Generally, the vendor/ folder is ignored unless you specifically 
+# want to "vendor" your dependencies (standard since Go 1.11 modules).
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Environment files (sensitive secrets)
+.env
+
+# Editor/IDE-specific files (best kept in a global .gitignore)
+.idea/
+.vscode/
+*.swp
+
