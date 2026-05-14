@@ -7,7 +7,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"log/slog"
+
 	"github.com/yourorg/kairos/internal/store"
 )
 
@@ -28,7 +29,7 @@ func NewServer(s *store.ScheduleStore, addr string) *Server {
 	mux.HandleFunc("DELETE /schedules/{id}", srv.handleDelete)
 
 	var h http.Handler = mux
-	h = zerologMiddleware(h)
+	h = loggingMiddleware(h)
 	h = recoveryMiddleware(h)
 
 	srv.srv = &http.Server{Addr: addr, Handler: h}
@@ -133,17 +134,17 @@ func (rw *statusResponseWriter) WriteHeader(status int) {
 	rw.ResponseWriter.WriteHeader(status)
 }
 
-func zerologMiddleware(next http.Handler) http.Handler {
+func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rw := &statusResponseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r)
-		log.Info().
-			Str("method", r.Method).
-			Str("path", r.URL.Path).
-			Int("status", rw.status).
-			Dur("latency_ms", time.Since(start)).
-			Msg("request")
+		slog.Info("request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rw.status,
+			"latency_ms", time.Since(start).Milliseconds(),
+		)
 	})
 }
 
@@ -151,7 +152,7 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Error().Interface("panic", rec).Bytes("stack", debug.Stack()).Msg("panic recovered")
+				slog.Error("panic recovered", "panic", rec, "stack", string(debug.Stack()))
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 		}()

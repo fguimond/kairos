@@ -43,4 +43,4 @@ Kairos is a scheduler micro-service: HTTP clients define schedules, a background
 - The `txWrapper` in `engine/engine.go` is a stub; the `FOR UPDATE SKIP LOCKED` lock is acquired at the SQL level per query, not wrapped in an explicit Go transaction. If you add real transaction support, wire a `pgxpool.Tx` through `DueSchedules` and `AdvanceNextRun`.
 - Delete is a soft-delete (`status = 'deleted'`); `List` excludes deleted rows but `Get` does not filter by status.
 - `payload` is stored as Postgres `JSONB` and passed through as `json.RawMessage` — never re-encoded.
-- Logging uses `zerolog`; the `api` package wraps every request through `zerologMiddleware` and `recoveryMiddleware`.
+- Logging uses `log/slog` (stdlib); the `api` package wraps every request through `loggingMiddleware` and `recoveryMiddleware`.

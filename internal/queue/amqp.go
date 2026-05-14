@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"log/slog"
+
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog/log"
 )
 
 // AMQPPublisher publishes trigger messages to a RabbitMQ queue.
@@ -42,7 +43,7 @@ func NewAMQPPublisher(url, queueName string) (*AMQPPublisher, error) {
 		return nil, fmt.Errorf("queue declare: %w", err)
 	}
 
-	log.Info().Str("queue", queueName).Msg("AMQP publisher ready")
+	slog.Info("AMQP publisher ready", "queue", queueName)
 	return &AMQPPublisher{conn: conn, ch: ch, queueName: queueName}, nil
 }
 

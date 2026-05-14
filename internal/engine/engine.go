@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"log/slog"
+
 	"github.com/yourorg/kairos/internal/store"
 )
 
@@ -56,14 +57,14 @@ func (e *Engine) Run(ctx context.Context) {
 func (e *Engine) tick(ctx context.Context) {
 	tx, err := beginTx(ctx, e.store)
 	if err != nil {
-		log.Error().Err(err).Msg("engine: begin tx")
+		slog.Error("engine: begin tx", "error", err)
 		return
 	}
 	defer tx.rollback()
 
 	schedules, err := e.store.DueSchedules(ctx, e.batchSize)
 	if err != nil {
-		log.Error().Err(err).Msg("engine: query due schedules")
+		slog.Error("engine: query due schedules", "error", err)
 		return
 	}
 
@@ -77,14 +78,14 @@ func (e *Engine) tick(ctx context.Context) {
 		body, _ := json.Marshal(msg)
 
 		if err := e.publisher.Publish(ctx, body); err != nil {
-			log.Error().Err(err).Str("schedule_id", sch.ID).Msg("engine: publish failed")
+			slog.Error("engine: publish failed", "error", err, "schedule_id", sch.ID)
 			continue // leave next_run_at unchanged; will retry next tick
 		}
 
 		if err := e.store.AdvanceNextRun(ctx, sch); err != nil {
-			log.Error().Err(err).Str("schedule_id", sch.ID).Msg("engine: advance next run")
+			slog.Error("engine: advance next run", "error", err, "schedule_id", sch.ID)
 		} else {
-			log.Info().Str("schedule_id", sch.ID).Str("name", sch.Name).Msg("trigger fired")
+			slog.Info("trigger fired", "schedule_id", sch.ID, "name", sch.Name)
 		}
 	}
 
