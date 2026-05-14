@@ -1,0 +1,235 @@
+openapi: 3.1.0
+info:
+  title: Kairos Scheduler API
+  version: v1
+  description: |
+    Define recurring or one-shot schedules via REST. Kairos publishes a JSON trigger
+    message to a RabbitMQ queue each time a schedule fires.
+
+    A schedule requires either a `cron_expr` (standard 5-field cron) or an
+    `interval_sec` (fixed repeat interval) — not both.
+
+    Consumers should treat `schedule_id` + `fired_at` as a deduplication key.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /schedules:
+    get:
+      summary: List schedules
+      operationId: listSchedules
+      responses:
+        "200":
+          description: All non-deleted schedules ordered by next_run_at
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Schedule"
+
+    post:
+      summary: Create a schedule
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScheduleInput"
+            examples:
+              cron:
+                summary: Daily cron
+                value:
+                  name: daily-report
+                  description: Triggers the daily report job
+                  cron_expr: "0 8 * * *"
+                  payload:
+                    report_type: daily
+                    recipients:
+                      - team@example.com
+              interval:
+                summary: Fixed interval
+                value:
+                  name: heartbeat
+                  interval_sec: 30
+                  payload:
+                    type: ping
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+
+  /schedules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+    get:
+      summary: Get a schedule
+      operationId: getSchedule
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "404":
+          $ref: "#/components/responses/Error"
+
+    patch:
+      summary: Update a schedule
+      operationId: updateSchedule
+      description: |
+        All fields are optional. To pause a schedule set `status` to `paused`;
+        to resume it set `status` back to `active`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateScheduleInput"
+            examples:
+              pause:
+                summary: Pause a schedule
+                value:
+                  status: paused
+              reschedule:
+                summary: Change cron expression
+                value:
+                  cron_expr: "0 9 * * 1-5"
+      responses:
+        "200":
+          description: Updated schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+    delete:
+      summary: Delete a schedule
+      operationId: deleteSchedule
+      description: Soft-deletes the schedule (sets status to `deleted`). Idempotent.
+      responses:
+        "204":
+          description: Deleted
+        "500":
+          $ref: "#/components/responses/Error"
+
+components:
+  schemas:
+    Status:
+      type: string
+      enum: [active, paused, completed, deleted]
+      description: |
+        - `active` — schedule is running normally
+        - `paused` — schedule will not fire until resumed
+        - `completed` — one-shot schedule has fired
+        - `deleted` — soft-deleted, excluded from listings
+
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+        description:
+          type: string
+        cron_expr:
+          type: string
+          example: "0 8 * * *"
+        interval_sec:
+          type: integer
+          format: int64
+          example: 30
+        payload:
+          type: object
+          description: Arbitrary JSON forwarded verbatim to the queue when the schedule fires.
+        status:
+          $ref: "#/components/schemas/Status"
+        next_run_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CreateScheduleInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        cron_expr:
+          type: string
+          description: Standard 5-field cron expression. Mutually exclusive with interval_sec.
+          example: "0 8 * * *"
+        interval_sec:
+          type: integer
+          format: int64
+          description: Fixed repeat interval in seconds. Mutually exclusive with cron_expr.
+          example: 30
+        payload:
+          type: object
+          description: Arbitrary JSON forwarded verbatim to the queue when the schedule fires.
+
+    UpdateScheduleInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        cron_expr:
+          type: string
+          example: "0 9 * * 1-5"
+        interval_sec:
+          type: integer
+          format: int64
+        payload:
+          type: object
+        status:
+          $ref: "#/components/schemas/Status"
+
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required:
+              - error

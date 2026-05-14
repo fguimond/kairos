@@ -22,6 +22,8 @@ func NewServer(s *store.ScheduleStore, addr string) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
+	mux.HandleFunc("GET /api/v1/openapi.yaml", srv.handleOpenAPISpec)
+	mux.HandleFunc("GET /docs", srv.handleDocs)
 	mux.HandleFunc("GET /api/v1/schedules", srv.handleList)
 	mux.HandleFunc("POST /api/v1/schedules", srv.handleCreate)
 	mux.HandleFunc("GET /api/v1/schedules/{id}", srv.handleGet)
