@@ -15,6 +15,12 @@ type Publisher interface {
 	Publish(ctx context.Context, msg []byte) error
 }
 
+// Store is the interface the engine uses to query and advance schedules.
+type Store interface {
+	DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error)
+	AdvanceNextRun(ctx context.Context, sch *store.Schedule) error
+}
+
 // TriggerMessage is what gets sent to the queue when a schedule fires.
 type TriggerMessage struct {
 	ScheduleID   string          `json:"schedule_id"`
@@ -25,13 +31,13 @@ type TriggerMessage struct {
 
 // Engine polls the schedule store and fires due schedules.
 type Engine struct {
-	store        *store.ScheduleStore
+	store        Store
 	publisher    Publisher
 	pollInterval time.Duration
 	batchSize    int
 }
 
-func New(s *store.ScheduleStore, p Publisher, pollInterval time.Duration) *Engine {
+func New(s Store, p Publisher, pollInterval time.Duration) *Engine {
 	return &Engine{
 		store:        s,
 		publisher:    p,
@@ -98,7 +104,7 @@ type txWrapper struct {
 	committed bool
 }
 
-func beginTx(_ context.Context, _ *store.ScheduleStore) (*txWrapper, error) {
+func beginTx(_ context.Context, _ Store) (*txWrapper, error) {
 	// In production, begin a real pgx transaction and pass it through the store calls.
 	// This stub keeps the engine package free of pgx imports — swap in a real tx here.
 	return &txWrapper{}, nil

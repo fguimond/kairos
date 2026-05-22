@@ -12,12 +12,20 @@ import (
 	"github.com/yourorg/kairos/internal/store"
 )
 
-type Server struct {
-	srv   *http.Server
-	store *store.ScheduleStore
+type scheduleStore interface {
+	List(ctx context.Context) ([]*store.Schedule, error)
+	Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
+	Get(ctx context.Context, id string) (*store.Schedule, error)
+	Update(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error)
+	Delete(ctx context.Context, id string) error
 }
 
-func NewServer(s *store.ScheduleStore, addr string) *Server {
+type Server struct {
+	srv   *http.Server
+	store scheduleStore
+}
+
+func NewServer(s scheduleStore, addr string) *Server {
 	srv := &Server{store: s}
 
 	mux := http.NewServeMux()
@@ -44,7 +52,7 @@ func (s *Server) Shutdown(ctx context.Context) error { return s.srv.Shutdown(ctx
 
 // --- handlers ---
 
-func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
