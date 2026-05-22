@@ -34,7 +34,7 @@ Kairos is a scheduler micro-service: HTTP clients define schedules, a background
 `api.Server` (stdlib `net/http` + method-pattern routing) → `store.ScheduleStore` (pgx/v5 pool) → Postgres
 
 **Trigger path (background):**
-`engine.Engine` ticks on `POLL_INTERVAL_MS`, calls `store.DueSchedules` with `FOR UPDATE SKIP LOCKED` (safe for multi-replica deploys), then calls `queue.AMQPPublisher.Publish`. On success, `store.AdvanceNextRun` recalculates `next_run_at` (cron via `robfig/cron`, or `+interval_sec`). One-shot schedules (no cron, no interval) are marked `completed` after firing.
+`engine.Engine` ticks on `POLL_INTERVAL_MS`, calls `store.DueSchedules` with `FOR UPDATE SKIP LOCKED` (safe for multi-replica deploys), then calls `queue.AMQPPublisher.Publish`. On success, `store.AdvanceNextRun` increments `execution_count` and recalculates `next_run_at` (cron via `robfig/cron`, or `+interval_sec`). Schedules are marked `completed` when they are one-shot (no cron, no interval) or when `execution_count` reaches `max_executions`.
 
 **Schema migration** is embedded in `store.Migrate` as a `CREATE TABLE IF NOT EXISTS` string — no migration framework, run on every startup.
 

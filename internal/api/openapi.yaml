@@ -142,7 +142,7 @@ components:
       description: |
         - `active` — schedule is running normally
         - `paused` — schedule will not fire until resumed
-        - `completed` — one-shot schedule has fired
+        - `completed` — one-shot schedule has fired, or max_executions has been reached
         - `deleted` — soft-deleted, excluded from listings
 
     Schedule:
@@ -168,6 +168,20 @@ components:
           description: Arbitrary JSON forwarded verbatim to the queue when the schedule fires.
         status:
           $ref: "#/components/schemas/Status"
+        max_executions:
+          type: integer
+          format: int64
+          nullable: true
+          description: >
+            Maximum number of times this schedule will fire. Once execution_count
+            reaches this value the schedule transitions to `completed`. Omit or
+            set to null for unlimited executions.
+          example: 10
+        execution_count:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Number of times this schedule has successfully fired.
         next_run_at:
           type: string
           format: date-time
@@ -202,6 +216,14 @@ components:
         payload:
           type: object
           description: Arbitrary JSON forwarded verbatim to the queue when the schedule fires.
+        max_executions:
+          type: integer
+          format: int64
+          nullable: true
+          description: >
+            Maximum number of times this schedule will fire. Omit or set to null
+            for unlimited executions. Must be greater than 0 if provided.
+          example: 10
 
     UpdateScheduleInput:
       type: object
@@ -220,6 +242,13 @@ components:
           type: object
         status:
           $ref: "#/components/schemas/Status"
+        max_executions:
+          type: integer
+          format: int64
+          nullable: true
+          description: >
+            Update the execution limit. Set to null to remove the limit.
+            Must be greater than 0 if provided.
 
   responses:
     Error:

@@ -71,6 +71,10 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "cron_expr or interval_sec is required")
 		return
 	}
+	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
+		writeError(w, http.StatusUnprocessableEntity, "max_executions must be greater than 0")
+		return
+	}
 
 	sch, err := s.store.Create(r.Context(), in)
 	if err != nil {
@@ -95,6 +99,10 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	var in store.UpdateScheduleInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
+		writeError(w, http.StatusUnprocessableEntity, "max_executions must be greater than 0")
 		return
 	}
 	sch, err := s.store.Update(r.Context(), id, in)

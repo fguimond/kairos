@@ -1,6 +1,6 @@
 # Kairos — Scheduler Micro-service
 
-Kairos is a lightweight Go micro-service that lets you **define schedules via a REST API** and **publishes a message to a queue** (RabbitMQ by default) every time a schedule fires.
+Kairos is a lightweight Go microservice that lets you **define schedules via a REST API** and **publishes a message to a queue** (RabbitMQ by default) every time a schedule fires.
 
 ## Architecture
 
@@ -76,6 +76,20 @@ Content-Type: application/json
 }
 ```
 
+Use `max_executions` to cap how many times a schedule fires. Once the limit is reached the schedule transitions to `completed` automatically:
+
+```http
+POST /schedules
+Content-Type: application/json
+
+{
+  "name": "onboarding-email",
+  "interval_sec": 86400,
+  "max_executions": 3,
+  "payload": { "template": "onboarding" }
+}
+```
+
 Response `201 Created`:
 
 ```json
@@ -84,6 +98,8 @@ Response `201 Created`:
   "name": "daily-report",
   "cron_expr": "0 8 * * *",
   "status": "active",
+  "max_executions": 3,
+  "execution_count": 0,
   "next_run_at": "2024-05-02T08:00:00Z",
   ...
 }
