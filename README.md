@@ -134,6 +134,29 @@ DELETE /schedules/{id}
 
 Returns `204 No Content`. Soft-deletes (sets `status = deleted`).
 
+## Sample consumer
+
+`cmd/consumer` is a standalone program that connects to the same queue and prints each trigger message to stdout. It's useful for verifying that schedules are firing without writing any consumer code yourself.
+
+```bash
+# In one terminal — start the consumer
+go run ./cmd/consumer
+
+# In another — start the service and create a schedule
+go run ./cmd/kairos
+```
+
+Output per fired job:
+```
+--- trigger fired ---
+  schedule_id:   550e8400-e29b-41d4-a716-446655440000
+  schedule_name: daily-report
+  fired_at:      2024-05-02T08:00:00Z
+  payload:       {"report_type":"daily"}
+```
+
+The consumer reads `AMQP_URL` and `QUEUE_NAME` from the environment, using the same defaults as the main service.
+
 ## Queue message format
 
 When a schedule fires, the following JSON is published to the queue:
@@ -157,7 +180,9 @@ Multiple Kairos instances can run concurrently. The engine uses `SELECT … FOR 
 
 ```
 kairos/
-├── cmd/kairos/         # main entrypoint
+├── cmd/
+│   ├── kairos/         # main entrypoint
+│   └── consumer/       # sample RabbitMQ consumer
 ├── internal/
 │   ├── api/            # HTTP handlers (chi)
 │   ├── config/         # env-based config

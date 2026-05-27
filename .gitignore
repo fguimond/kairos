@@ -6,7 +6,8 @@
 *.dylib
 *.test
 *.prof
-kairos
+/consumer
+/kairos
 
 # Test artifacts (e.g., code coverage profiles)
 *.out
