@@ -52,7 +52,7 @@ docker compose up --build
 ### Create a schedule
 
 ```http
-POST /schedules
+POST /api/v1/schedules
 Content-Type: application/json
 
 {
@@ -66,7 +66,7 @@ Content-Type: application/json
 Or with a fixed interval (every 30 seconds):
 
 ```http
-POST /schedules
+POST /api/v1/schedules
 Content-Type: application/json
 
 {
@@ -79,7 +79,7 @@ Content-Type: application/json
 Use `max_executions` to cap how many times a schedule fires. Once the limit is reached the schedule transitions to `completed` automatically:
 
 ```http
-POST /schedules
+POST /api/v1/schedules
 Content-Type: application/json
 
 {
@@ -101,26 +101,26 @@ Response `201 Created`:
   "max_executions": 3,
   "execution_count": 0,
   "next_run_at": "2024-05-02T08:00:00Z",
-  ...
+  "...": "..."
 }
 ```
 
 ### List schedules
 
 ```http
-GET /schedules
+GET /api/v1/schedules
 ```
 
 ### Get a schedule
 
 ```http
-GET /schedules/{id}
+GET /api/v1/schedules/{id}
 ```
 
 ### Update a schedule
 
 ```http
-PATCH /schedules/{id}
+PATCH /api/v1/schedules/{id}
 Content-Type: application/json
 
 { "status": "paused" }
@@ -129,7 +129,7 @@ Content-Type: application/json
 ### Delete a schedule
 
 ```http
-DELETE /schedules/{id}
+DELETE /api/v1/schedules/{id}
 ```
 
 Returns `204 No Content`. Soft-deletes (sets `status = deleted`).
