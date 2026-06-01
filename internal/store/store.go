@@ -2,13 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/robfig/cron/v3"
 )
 
 // DB is a thin alias so callers don't import pgxpool directly.
@@ -55,53 +54,14 @@ type ScheduleStore struct{ db *DB }
 
 func NewScheduleStore(db *DB) *ScheduleStore { return &ScheduleStore{db: db} }
 
-var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-
-// nextRun computes the first trigger time for a new schedule.
-func nextRun(in CreateScheduleInput) (time.Time, error) {
-	if in.CronExpr != "" {
-		sched, err := cronParser.Parse(in.CronExpr)
-		if err != nil {
-			return time.Time{}, fmt.Errorf("invalid cron expression: %w", err)
-		}
-		return sched.Next(time.Now().UTC()), nil
-	}
-	if in.IntervalSec != nil && *in.IntervalSec > 0 {
-		return time.Now().UTC().Add(time.Duration(*in.IntervalSec) * time.Second), nil
-	}
-	return time.Time{}, fmt.Errorf("either cron_expr or interval_sec must be provided")
-}
-
-func (s *ScheduleStore) Create(ctx context.Context, in CreateScheduleInput) (*Schedule, error) {
-	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
-		return nil, fmt.Errorf("max_executions must be greater than 0")
-	}
-	nr, err := nextRun(in)
-	if err != nil {
-		return nil, err
-	}
-
-	sch := &Schedule{
-		ID:            uuid.NewString(),
-		Name:          in.Name,
-		Description:   in.Description,
-		CronExpr:      in.CronExpr,
-		IntervalSec:   in.IntervalSec,
-		Payload:       in.Payload,
-		Status:        StatusActive,
-		MaxExecutions: in.MaxExecutions,
-		NextRunAt:     nr,
-		CreatedAt:     time.Now().UTC(),
-		UpdatedAt:     time.Now().UTC(),
-	}
-
-	_, err = s.db.Exec(ctx,
+func (s *ScheduleStore) Insert(ctx context.Context, sch *Schedule) error {
+	_, err := s.db.Exec(ctx,
 		`INSERT INTO schedules (id,name,description,cron_expr,interval_sec,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,$11)`,
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec,
 		sch.Payload, sch.Status, sch.MaxExecutions, sch.NextRunAt, sch.CreatedAt, sch.UpdatedAt,
 	)
-	return sch, err
+	return err
 }
 
 func (s *ScheduleStore) Get(ctx context.Context, id string) (*Schedule, error) {
@@ -131,44 +91,14 @@ func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
 	return out, rows.Err()
 }
 
-func (s *ScheduleStore) Update(ctx context.Context, id string, in UpdateScheduleInput) (*Schedule, error) {
-	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
-		return nil, fmt.Errorf("max_executions must be greater than 0")
-	}
-	sch, err := s.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if in.Name != nil {
-		sch.Name = *in.Name
-	}
-	if in.Description != nil {
-		sch.Description = *in.Description
-	}
-	if in.CronExpr != nil {
-		sch.CronExpr = *in.CronExpr
-	}
-	if in.IntervalSec != nil {
-		sch.IntervalSec = in.IntervalSec
-	}
-	if in.Payload != nil {
-		sch.Payload = *in.Payload
-	}
-	if in.Status != nil {
-		sch.Status = *in.Status
-	}
-	if in.MaxExecutions != nil {
-		sch.MaxExecutions = in.MaxExecutions
-	}
-	sch.UpdatedAt = time.Now().UTC()
-
-	_, err = s.db.Exec(ctx,
+func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
+	_, err := s.db.Exec(ctx,
 		`UPDATE schedules SET name=$2,description=$3,cron_expr=$4,interval_sec=$5,payload=$6,
          status=$7,max_executions=$8,updated_at=$9 WHERE id=$1`,
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec,
 		sch.Payload, sch.Status, sch.MaxExecutions, sch.UpdatedAt,
 	)
-	return sch, err
+	return err
 }
 
 func (s *ScheduleStore) Delete(ctx context.Context, id string) error {
@@ -203,36 +133,17 @@ func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedul
 	return out, rows.Err()
 }
 
-// AdvanceNextRun updates next_run_at after a successful trigger, or marks the
-// schedule completed for one-shot jobs (no cron and no interval) or when
-// max_executions has been reached.
-func (s *ScheduleStore) AdvanceNextRun(ctx context.Context, sch *Schedule) error {
-	sch.ExecutionCount++
+func (s *ScheduleStore) Complete(ctx context.Context, id string, count int64) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE schedules SET status='completed', execution_count=$2, updated_at=NOW() WHERE id=$1`,
+		id, count)
+	return err
+}
 
-	limitReached := sch.MaxExecutions != nil && sch.ExecutionCount >= *sch.MaxExecutions
-	oneShot := sch.CronExpr == "" && (sch.IntervalSec == nil || *sch.IntervalSec <= 0)
-
-	if limitReached || oneShot {
-		_, err := s.db.Exec(ctx,
-			`UPDATE schedules SET status='completed', execution_count=$2, updated_at=NOW() WHERE id=$1`,
-			sch.ID, sch.ExecutionCount)
-		return err
-	}
-
-	var next time.Time
-	if sch.CronExpr != "" {
-		sched, err := cronParser.Parse(sch.CronExpr)
-		if err != nil {
-			return err
-		}
-		next = sched.Next(time.Now().UTC())
-	} else {
-		next = time.Now().UTC().Add(time.Duration(*sch.IntervalSec) * time.Second)
-	}
-
+func (s *ScheduleStore) SetNextRun(ctx context.Context, id string, next time.Time, count int64) error {
 	_, err := s.db.Exec(ctx,
 		`UPDATE schedules SET next_run_at=$2, execution_count=$3, updated_at=NOW() WHERE id=$1`,
-		sch.ID, next, sch.ExecutionCount)
+		id, next, count)
 	return err
 }
 
@@ -249,7 +160,7 @@ func scanSchedule(row scannable) (*Schedule, error) {
 		&sch.Status, &sch.MaxExecutions, &sch.ExecutionCount,
 		&sch.NextRunAt, &sch.CreatedAt, &sch.UpdatedAt,
 	)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("schedule not found")
 	}
 	return &sch, err

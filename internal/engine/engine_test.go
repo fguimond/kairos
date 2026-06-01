@@ -10,16 +10,16 @@ import (
 	"github.com/yourorg/kairos/internal/store"
 )
 
-type mockStore struct {
+type mockService struct {
 	dueSchedules   func(ctx context.Context, limit int) ([]*store.Schedule, error)
 	advanceNextRun func(ctx context.Context, sch *store.Schedule) error
 }
 
-func (m *mockStore) DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error) {
+func (m *mockService) DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error) {
 	return m.dueSchedules(ctx, limit)
 }
 
-func (m *mockStore) AdvanceNextRun(ctx context.Context, sch *store.Schedule) error {
+func (m *mockService) AdvanceNextRun(ctx context.Context, sch *store.Schedule) error {
 	return m.advanceNextRun(ctx, sch)
 }
 
@@ -31,8 +31,8 @@ func (m *mockPublisher) Publish(ctx context.Context, msg []byte) error {
 	return m.publish(ctx, msg)
 }
 
-func newTestEngine(s Store, p Publisher) *Engine {
-	return &Engine{store: s, publisher: p, pollInterval: time.Second, batchSize: 100}
+func newTestEngine(s Service, p Publisher) *Engine {
+	return &Engine{svc: s, publisher: p, pollInterval: time.Second, batchSize: 100}
 }
 
 // --- tick happy paths ---
@@ -40,7 +40,7 @@ func newTestEngine(s Store, p Publisher) *Engine {
 func TestTick_NoDueSchedules(t *testing.T) {
 	advanced := 0
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return nil, nil },
 			advanceNextRun: func(ctx context.Context, sch *store.Schedule) error { advanced++; return nil },
 		},
@@ -58,7 +58,7 @@ func TestTick_PublishesAndAdvancesSchedule(t *testing.T) {
 	sch := &store.Schedule{ID: "s1", Name: "hourly", Payload: json.RawMessage(`{}`)}
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return []*store.Schedule{sch}, nil },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { advanced++; return nil },
 		},
@@ -83,7 +83,7 @@ func TestTick_MultipleSchedules_AllProcessed(t *testing.T) {
 	}
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return schedules, nil },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { advanced++; return nil },
 		},
@@ -107,7 +107,7 @@ func TestTick_MessageContainsCorrectFields(t *testing.T) {
 	var captured []byte
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return []*store.Schedule{sch}, nil },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { return nil },
 		},
@@ -140,7 +140,7 @@ func TestTick_DueSchedulesError_NoPublishOrAdvance(t *testing.T) {
 	advanced := 0
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return nil, errors.New("db error") },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { advanced++; return nil },
 		},
@@ -157,7 +157,7 @@ func TestTick_PublishError_SkipsAdvance(t *testing.T) {
 	sch := &store.Schedule{ID: "s1", Name: "test", Payload: json.RawMessage(`{}`)}
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return []*store.Schedule{sch}, nil },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { advanced++; return nil },
 		},
@@ -179,7 +179,7 @@ func TestTick_PublishError_ContinuesToNextSchedule(t *testing.T) {
 	}
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return schedules, nil },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { advanced++; return nil },
 		},
@@ -209,7 +209,7 @@ func TestTick_AdvanceError_DoesNotStopLoop(t *testing.T) {
 	}
 
 	e := newTestEngine(
-		&mockStore{
+		&mockService{
 			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return schedules, nil },
 			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { return errors.New("db error") },
 		},

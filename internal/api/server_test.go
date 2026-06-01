@@ -12,8 +12,8 @@ import (
 	"github.com/yourorg/kairos/internal/store"
 )
 
-// mockStore implements scheduleStore for testing.
-type mockStore struct {
+// mockService implements scheduleService for testing.
+type mockService struct {
 	list   func(ctx context.Context) ([]*store.Schedule, error)
 	create func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
 	get    func(ctx context.Context, id string) (*store.Schedule, error)
@@ -21,26 +21,26 @@ type mockStore struct {
 	del    func(ctx context.Context, id string) error
 }
 
-func (m *mockStore) List(ctx context.Context) ([]*store.Schedule, error) { return m.list(ctx) }
-func (m *mockStore) Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
+func (m *mockService) List(ctx context.Context) ([]*store.Schedule, error) { return m.list(ctx) }
+func (m *mockService) Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
 	return m.create(ctx, in)
 }
-func (m *mockStore) Get(ctx context.Context, id string) (*store.Schedule, error) {
+func (m *mockService) Get(ctx context.Context, id string) (*store.Schedule, error) {
 	return m.get(ctx, id)
 }
-func (m *mockStore) Update(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error) {
+func (m *mockService) Update(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error) {
 	return m.update(ctx, id, in)
 }
-func (m *mockStore) Delete(ctx context.Context, id string) error { return m.del(ctx, id) }
+func (m *mockService) Delete(ctx context.Context, id string) error { return m.del(ctx, id) }
 
-func newTestServer(ms scheduleStore) *Server {
-	return &Server{store: ms}
+func newTestServer(ms scheduleService) *Server {
+	return &Server{svc: ms}
 }
 
 // --- /healthz ---
 
 func TestHandleHealthz(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	r := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
 	srv.handleHealthz(w, r)
@@ -58,7 +58,7 @@ func TestHandleHealthz(t *testing.T) {
 
 func TestHandleList_Happy(t *testing.T) {
 	schedules := []*store.Schedule{{ID: "1", Name: "nightly"}}
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		list: func(ctx context.Context) ([]*store.Schedule, error) { return schedules, nil },
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
@@ -75,7 +75,7 @@ func TestHandleList_Happy(t *testing.T) {
 }
 
 func TestHandleList_EmptyList(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		list: func(ctx context.Context) ([]*store.Schedule, error) { return nil, nil },
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
@@ -87,7 +87,7 @@ func TestHandleList_EmptyList(t *testing.T) {
 }
 
 func TestHandleList_StoreError(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		list: func(ctx context.Context) ([]*store.Schedule, error) {
 			return nil, errors.New("db error")
 		},
@@ -104,7 +104,7 @@ func TestHandleList_StoreError(t *testing.T) {
 
 func TestHandleCreate_HappyCron(t *testing.T) {
 	created := &store.Schedule{ID: "abc", Name: "daily"}
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		create: func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
 			return created, nil
 		},
@@ -125,7 +125,7 @@ func TestHandleCreate_HappyCron(t *testing.T) {
 
 func TestHandleCreate_HappyInterval(t *testing.T) {
 	created := &store.Schedule{ID: "xyz", Name: "every-5m"}
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		create: func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
 			return created, nil
 		},
@@ -140,7 +140,7 @@ func TestHandleCreate_HappyInterval(t *testing.T) {
 }
 
 func TestHandleCreate_InvalidJSON(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", bytes.NewReader([]byte("not json")))
 	w := httptest.NewRecorder()
 	srv.handleCreate(w, r)
@@ -150,7 +150,7 @@ func TestHandleCreate_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleCreate_MissingName(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	body, _ := json.Marshal(map[string]any{"cron_expr": "* * * * *"})
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestHandleCreate_MissingName(t *testing.T) {
 }
 
 func TestHandleCreate_MissingSchedule(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	body, _ := json.Marshal(map[string]any{"name": "test"})
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -172,7 +172,7 @@ func TestHandleCreate_MissingSchedule(t *testing.T) {
 }
 
 func TestHandleCreate_MaxExecutionsZero(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	body, _ := json.Marshal(map[string]any{"name": "test", "cron_expr": "* * * * *", "max_executions": 0})
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -183,7 +183,7 @@ func TestHandleCreate_MaxExecutionsZero(t *testing.T) {
 }
 
 func TestHandleCreate_StoreError(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		create: func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
 			return nil, errors.New("invalid cron expression")
 		},
@@ -201,7 +201,7 @@ func TestHandleCreate_StoreError(t *testing.T) {
 
 func TestHandleGet_Happy(t *testing.T) {
 	sch := &store.Schedule{ID: "abc-123", Name: "test"}
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		get: func(ctx context.Context, id string) (*store.Schedule, error) {
 			if id != "abc-123" {
 				t.Errorf("unexpected id: %s", id)
@@ -224,7 +224,7 @@ func TestHandleGet_Happy(t *testing.T) {
 }
 
 func TestHandleGet_NotFound(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		get: func(ctx context.Context, id string) (*store.Schedule, error) {
 			return nil, errors.New("schedule not found")
 		},
@@ -242,7 +242,7 @@ func TestHandleGet_NotFound(t *testing.T) {
 
 func TestHandleUpdate_Happy(t *testing.T) {
 	updated := &store.Schedule{ID: "abc", Name: "updated-name"}
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		update: func(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error) {
 			return updated, nil
 		},
@@ -264,7 +264,7 @@ func TestHandleUpdate_Happy(t *testing.T) {
 }
 
 func TestHandleUpdate_InvalidJSON(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	r := httptest.NewRequest(http.MethodPatch, "/api/v1/schedules/abc", bytes.NewReader([]byte("{")))
 	r.SetPathValue("id", "abc")
 	w := httptest.NewRecorder()
@@ -275,7 +275,7 @@ func TestHandleUpdate_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleUpdate_MaxExecutionsNegative(t *testing.T) {
-	srv := newTestServer(&mockStore{})
+	srv := newTestServer(&mockService{})
 	maxExecutions := int64(-1)
 	body, _ := json.Marshal(store.UpdateScheduleInput{MaxExecutions: &maxExecutions})
 	r := httptest.NewRequest(http.MethodPatch, "/api/v1/schedules/abc", bytes.NewReader(body))
@@ -288,7 +288,7 @@ func TestHandleUpdate_MaxExecutionsNegative(t *testing.T) {
 }
 
 func TestHandleUpdate_StoreError(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		update: func(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error) {
 			return nil, errors.New("db error")
 		},
@@ -306,7 +306,7 @@ func TestHandleUpdate_StoreError(t *testing.T) {
 // --- DELETE /api/v1/schedules/{id} ---
 
 func TestHandleDelete_Happy(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		del: func(ctx context.Context, id string) error { return nil },
 	})
 	r := httptest.NewRequest(http.MethodDelete, "/api/v1/schedules/abc", nil)
@@ -319,7 +319,7 @@ func TestHandleDelete_Happy(t *testing.T) {
 }
 
 func TestHandleDelete_StoreError(t *testing.T) {
-	srv := newTestServer(&mockStore{
+	srv := newTestServer(&mockService{
 		del: func(ctx context.Context, id string) error { return errors.New("db error") },
 	})
 	r := httptest.NewRequest(http.MethodDelete, "/api/v1/schedules/abc", nil)

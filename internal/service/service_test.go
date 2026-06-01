@@ -1,4 +1,4 @@
-package store
+package service
 
 import (
 	"testing"
@@ -6,8 +6,7 @@ import (
 )
 
 func TestNextRun_ValidCron(t *testing.T) {
-	in := CreateScheduleInput{CronExpr: "* * * * *"}
-	got, err := nextRun(in)
+	got, err := nextRun("* * * * *", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -18,9 +17,8 @@ func TestNextRun_ValidCron(t *testing.T) {
 
 func TestNextRun_ValidInterval(t *testing.T) {
 	sec := int64(60)
-	in := CreateScheduleInput{IntervalSec: &sec}
 	before := time.Now().UTC()
-	got, err := nextRun(in)
+	got, err := nextRun("", &sec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -32,14 +30,14 @@ func TestNextRun_ValidInterval(t *testing.T) {
 }
 
 func TestNextRun_NoCronNoInterval(t *testing.T) {
-	_, err := nextRun(CreateScheduleInput{})
+	_, err := nextRun("", nil)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
 }
 
 func TestNextRun_InvalidCronExpr(t *testing.T) {
-	_, err := nextRun(CreateScheduleInput{CronExpr: "not-a-cron"})
+	_, err := nextRun("not-a-cron", nil)
 	if err == nil {
 		t.Error("expected error for invalid cron expression, got nil")
 	}
@@ -47,7 +45,7 @@ func TestNextRun_InvalidCronExpr(t *testing.T) {
 
 func TestNextRun_ZeroInterval(t *testing.T) {
 	sec := int64(0)
-	_, err := nextRun(CreateScheduleInput{IntervalSec: &sec})
+	_, err := nextRun("", &sec)
 	if err == nil {
 		t.Error("expected error for zero interval, got nil")
 	}
@@ -55,7 +53,7 @@ func TestNextRun_ZeroInterval(t *testing.T) {
 
 func TestNextRun_NegativeInterval(t *testing.T) {
 	sec := int64(-10)
-	_, err := nextRun(CreateScheduleInput{IntervalSec: &sec})
+	_, err := nextRun("", &sec)
 	if err == nil {
 		t.Error("expected error for negative interval, got nil")
 	}
@@ -63,13 +61,10 @@ func TestNextRun_NegativeInterval(t *testing.T) {
 
 func TestNextRun_CronTakesPrecedenceOverInterval(t *testing.T) {
 	sec := int64(60)
-	in := CreateScheduleInput{CronExpr: "* * * * *", IntervalSec: &sec}
-	got, err := nextRun(in)
+	got, err := nextRun("* * * * *", &sec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// cron next run is within the next 60 seconds; interval would be exactly 60s out
-	// both should be in the future — just verify it resolves without error
 	if !got.After(time.Now().UTC()) {
 		t.Error("expected next run to be in the future")
 	}
