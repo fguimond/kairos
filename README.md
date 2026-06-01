@@ -39,13 +39,13 @@ docker compose up --build
 
 ## Environment variables
 
-| Variable           | Default                                              | Description                        |
-|--------------------|------------------------------------------------------|------------------------------------|
-| `LISTEN_ADDR`      | `:8080`                                              | HTTP listen address                |
-| `DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN      |
-| `AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                 | RabbitMQ connection string         |
-| `QUEUE_NAME`       | `kairos.triggers`                                    | Queue to publish trigger messages  |
-| `POLL_INTERVAL_MS` | `5000`                                               | How often the engine polls (ms)    |
+| Variable           | Default                                                          | Description                       |
+|--------------------|------------------------------------------------------------------|-----------------------------------|
+| `LISTEN_ADDR`      | `:8080`                                                          | HTTP listen address               |
+| `DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                      |
+| `AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string        |
+| `QUEUE_NAME`       | `kairos.triggers`                                                | Queue to publish trigger messages |
+| `POLL_INTERVAL_MS` | `5000`                                                           | How often the engine polls (ms)   |
 
 ## REST API
 
