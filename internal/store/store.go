@@ -45,8 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules (status, next_run
 `
 
 func Migrate(db *DB) error {
-	_, err := db.Exec(context.Background(), schema)
-	return err
+	if _, err := db.Exec(context.Background(), schema); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
 }
 
 // ScheduleStore is the data-access layer for schedules.
@@ -61,7 +63,10 @@ func (s *ScheduleStore) Insert(ctx context.Context, sch *Schedule) error {
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec,
 		sch.Payload, sch.Status, sch.MaxExecutions, sch.NextRunAt, sch.CreatedAt, sch.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("insert schedule: %w", err)
+	}
+	return nil
 }
 
 func (s *ScheduleStore) Get(ctx context.Context, id string) (*Schedule, error) {
@@ -76,7 +81,7 @@ func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
 		`SELECT id,name,description,cron_expr,interval_sec,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules WHERE status != 'deleted' ORDER BY next_run_at ASC`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list schedules: %w", err)
 	}
 	defer rows.Close()
 
@@ -88,7 +93,10 @@ func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
 		}
 		out = append(out, sch)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list schedules: %w", err)
+	}
+	return out, nil
 }
 
 func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
@@ -98,13 +106,19 @@ func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec,
 		sch.Payload, sch.Status, sch.MaxExecutions, sch.UpdatedAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("save schedule: %w", err)
+	}
+	return nil
 }
 
 func (s *ScheduleStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.Exec(ctx,
 		`UPDATE schedules SET status='deleted', updated_at=NOW() WHERE id=$1`, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("delete schedule: %w", err)
+	}
+	return nil
 }
 
 // DueSchedules returns up to limit active schedules whose next_run_at is in the past,
@@ -118,7 +132,7 @@ func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedul
          LIMIT $1
          FOR UPDATE SKIP LOCKED`, limit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("due schedules: %w", err)
 	}
 	defer rows.Close()
 
@@ -130,21 +144,30 @@ func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedul
 		}
 		out = append(out, sch)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("due schedules: %w", err)
+	}
+	return out, nil
 }
 
 func (s *ScheduleStore) Complete(ctx context.Context, id string, count int64) error {
 	_, err := s.db.Exec(ctx,
 		`UPDATE schedules SET status='completed', execution_count=$2, updated_at=NOW() WHERE id=$1`,
 		id, count)
-	return err
+	if err != nil {
+		return fmt.Errorf("complete schedule: %w", err)
+	}
+	return nil
 }
 
 func (s *ScheduleStore) SetNextRun(ctx context.Context, id string, next time.Time, count int64) error {
 	_, err := s.db.Exec(ctx,
 		`UPDATE schedules SET next_run_at=$2, execution_count=$3, updated_at=NOW() WHERE id=$1`,
 		id, next, count)
-	return err
+	if err != nil {
+		return fmt.Errorf("set next run: %w", err)
+	}
+	return nil
 }
 
 // scanSchedule works for both pgx.Row and pgx.Rows.

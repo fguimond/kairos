@@ -63,16 +63,22 @@ func consume(msgs <-chan amqp.Delivery, stop <-chan struct{}, w io.Writer) {
 			var msg TriggerMessage
 			if err := json.Unmarshal(d.Body, &msg); err != nil {
 				slog.Warn("failed to decode message", "err", err, "body", string(d.Body))
-				d.Nack(false, false)
+				if err := d.Nack(false, false); err != nil {
+					slog.Error("nack failed", "error", err)
+				}
 				continue
 			}
-			fmt.Fprintf(w, "--- trigger fired ---\n  schedule_id:   %s\n  schedule_name: %s\n  fired_at:      %s\n  payload:       %s\n",
+			if _, err := fmt.Fprintf(w, "--- trigger fired ---\n  schedule_id:   %s\n  schedule_name: %s\n  fired_at:      %s\n  payload:       %s\n",
 				msg.ScheduleID,
 				msg.ScheduleName,
 				msg.FiredAt.Format(time.RFC3339),
 				string(msg.Payload),
-			)
-			d.Ack(false)
+			); err != nil {
+				slog.Error("write failed", "error", err)
+			}
+			if err := d.Ack(false); err != nil {
+				slog.Error("ack failed", "error", err)
+			}
 		case <-stop:
 			slog.Info("shutting down consumer")
 			return
@@ -83,12 +89,12 @@ func consume(msgs <-chan amqp.Delivery, stop <-chan struct{}, w io.Writer) {
 func realOpenConn(url string) (amqpChannel, func(), error) {
 	conn, err := amqp.Dial(url)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("amqp dial: %w", err)
 	}
 	ch, err := conn.Channel()
 	if err != nil {
 		_ = conn.Close()
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("amqp channel: %w", err)
 	}
 	return ch, func() {
 		_ = ch.Close()

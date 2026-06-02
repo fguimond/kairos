@@ -23,9 +23,10 @@ go test -tags=integration ./internal/store/...
 # Run a single test by name
 go test ./internal/store/... -run TestFunctionName
 go test -tags=integration ./internal/store/... -run TestFunctionName
-```
 
-No linter is configured yet. The standard `go vet ./...` applies.
+# Run linter
+golangci-lint run ./...
+```
 
 ## Architecture
 
