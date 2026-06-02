@@ -95,6 +95,22 @@ Content-Type: application/json
 }
 ```
 
+Cron schedules fire in UTC by default. Pass an optional `timezone` field (IANA name) to evaluate the expression in a different timezone:
+
+```http
+POST /api/v1/schedules
+Content-Type: application/json
+
+{
+  "name": "daily-report-nyc",
+  "cron_expr": "0 8 * * *",
+  "timezone": "America/New_York",
+  "payload": { "report_type": "daily" }
+}
+```
+
+The schedule above fires at 08:00 New York time (observing EST/EDT automatically). `timezone` is ignored for `interval_sec` schedules — those are always relative durations. An invalid IANA timezone name returns `422 Unprocessable Entity`.
+
 Or with a fixed interval (every 30 seconds):
 
 ```http
