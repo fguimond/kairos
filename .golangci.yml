@@ -25,5 +25,5 @@ linters:
       excludes:
         - G101
     wrapcheck:
-      ignorePackageGlobs:
+      ignore-package-globs:
         - "github.com/yourorg/kairos/*"
