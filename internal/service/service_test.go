@@ -66,7 +66,7 @@ func baseSchedule() *store.Schedule {
 // --- nextRun ---
 
 func TestNextRun_ValidCron(t *testing.T) {
-	got, err := nextRun("* * * * *", nil)
+	got, err := nextRun("* * * * *", nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestNextRun_ValidCron(t *testing.T) {
 func TestNextRun_ValidInterval(t *testing.T) {
 	sec := int64(60)
 	before := time.Now().UTC()
-	got, err := nextRun("", &sec)
+	got, err := nextRun("", &sec, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,14 +90,14 @@ func TestNextRun_ValidInterval(t *testing.T) {
 }
 
 func TestNextRun_NoCronNoInterval(t *testing.T) {
-	_, err := nextRun("", nil)
+	_, err := nextRun("", nil, "")
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
 }
 
 func TestNextRun_InvalidCronExpr(t *testing.T) {
-	_, err := nextRun("not-a-cron", nil)
+	_, err := nextRun("not-a-cron", nil, "")
 	if err == nil {
 		t.Error("expected error for invalid cron expression, got nil")
 	}
@@ -105,7 +105,7 @@ func TestNextRun_InvalidCronExpr(t *testing.T) {
 
 func TestNextRun_ZeroInterval(t *testing.T) {
 	sec := int64(0)
-	_, err := nextRun("", &sec)
+	_, err := nextRun("", &sec, "")
 	if err == nil {
 		t.Error("expected error for zero interval, got nil")
 	}
@@ -113,7 +113,7 @@ func TestNextRun_ZeroInterval(t *testing.T) {
 
 func TestNextRun_NegativeInterval(t *testing.T) {
 	sec := int64(-10)
-	_, err := nextRun("", &sec)
+	_, err := nextRun("", &sec, "")
 	if err == nil {
 		t.Error("expected error for negative interval, got nil")
 	}
@@ -121,12 +121,43 @@ func TestNextRun_NegativeInterval(t *testing.T) {
 
 func TestNextRun_CronTakesPrecedenceOverInterval(t *testing.T) {
 	sec := int64(60)
-	got, err := nextRun("* * * * *", &sec)
+	got, err := nextRun("* * * * *", &sec, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !got.After(time.Now().UTC()) {
 		t.Error("expected next run to be in the future")
+	}
+}
+
+func TestNextRun_ValidTimezone(t *testing.T) {
+	got, err := nextRun("* * * * *", nil, "America/New_York")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.After(time.Now().UTC()) {
+		t.Error("expected next run to be in the future")
+	}
+}
+
+func TestNextRun_InvalidTimezone(t *testing.T) {
+	_, err := nextRun("* * * * *", nil, "Not/ATimezone")
+	if err == nil {
+		t.Error("expected error for invalid timezone, got nil")
+	}
+}
+
+func TestNextRun_IntervalIgnoresTimezone(t *testing.T) {
+	sec := int64(60)
+	before := time.Now().UTC()
+	got, err := nextRun("", &sec, "America/New_York")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	lower := before.Add(59 * time.Second)
+	upper := before.Add(61 * time.Second)
+	if got.Before(lower) || got.After(upper) {
+		t.Errorf("next run %v outside expected range for interval with timezone", got)
 	}
 }
 
@@ -250,6 +281,42 @@ func TestCreate_MaxExecutionsNegative(t *testing.T) {
 	}
 	if insertCalled {
 		t.Error("Insert must not be called when validation fails")
+	}
+}
+
+func TestCreate_TimezonePropagated(t *testing.T) {
+	var inserted *store.Schedule
+	svc := newSvc(&mockStore{
+		insertFn: func(_ context.Context, sch *store.Schedule) error { inserted = sch; return nil },
+	})
+	_, err := svc.Create(context.Background(), store.CreateScheduleInput{
+		Name:     "tz job",
+		CronExpr: "0 9 * * *",
+		Timezone: "America/New_York",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inserted.Timezone != "America/New_York" {
+		t.Errorf("expected timezone America/New_York, got %q", inserted.Timezone)
+	}
+}
+
+func TestCreate_InvalidTimezone(t *testing.T) {
+	insertCalled := false
+	svc := newSvc(&mockStore{
+		insertFn: func(_ context.Context, _ *store.Schedule) error { insertCalled = true; return nil },
+	})
+	_, err := svc.Create(context.Background(), store.CreateScheduleInput{
+		Name:     "x",
+		CronExpr: "* * * * *",
+		Timezone: "Not/ATimezone",
+	})
+	if err == nil {
+		t.Error("expected error for invalid timezone")
+	}
+	if insertCalled {
+		t.Error("Insert must not be called when timezone is invalid")
 	}
 }
 
@@ -558,6 +625,43 @@ func TestUpdate_MaxExecutionsNegative(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("expected error for negative max_executions")
+	}
+}
+
+func TestUpdate_InvalidTimezone(t *testing.T) {
+	saveCalled := false
+	svc := newSvc(&mockStore{
+		getFn:  func(_ context.Context, _ string) (*store.Schedule, error) { return baseSchedule(), nil },
+		saveFn: func(_ context.Context, _ *store.Schedule) error { saveCalled = true; return nil },
+	})
+	_, err := svc.Update(context.Background(), "existing-id", store.UpdateScheduleInput{
+		Timezone: ptr("Not/ATimezone"),
+	})
+	if err == nil {
+		t.Error("expected error for invalid timezone")
+	}
+	if saveCalled {
+		t.Error("Save must not be called when timezone is invalid")
+	}
+}
+
+func TestUpdate_ValidTimezone(t *testing.T) {
+	var saved *store.Schedule
+	svc := newSvc(&mockStore{
+		getFn:  func(_ context.Context, _ string) (*store.Schedule, error) { return baseSchedule(), nil },
+		saveFn: func(_ context.Context, sch *store.Schedule) error { saved = sch; return nil },
+	})
+	got, err := svc.Update(context.Background(), "existing-id", store.UpdateScheduleInput{
+		Timezone: ptr("America/New_York"),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Timezone != "America/New_York" {
+		t.Errorf("expected timezone America/New_York, got %q", got.Timezone)
+	}
+	if saved.Timezone != "America/New_York" {
+		t.Error("Save was called with wrong timezone")
 	}
 }
 

@@ -21,6 +21,7 @@ type Schedule struct {
 	Description    string          `json:"description,omitempty"`
 	CronExpr       string          `json:"cron_expr,omitempty"`
 	IntervalSec    *int64          `json:"interval_sec,omitempty"`
+	Timezone       string          `json:"timezone,omitempty"`
 	Payload        json.RawMessage `json:"payload"`
 	Status         Status          `json:"status"`
 	MaxExecutions  *int64          `json:"max_executions,omitempty"`
@@ -36,6 +37,7 @@ type CreateScheduleInput struct {
 	Description   string          `json:"description"`
 	CronExpr      string          `json:"cron_expr"`
 	IntervalSec   *int64          `json:"interval_sec"`
+	Timezone      string          `json:"timezone"`
 	Payload       json.RawMessage `json:"payload"`
 	MaxExecutions *int64          `json:"max_executions"`
 }
@@ -46,6 +48,7 @@ type UpdateScheduleInput struct {
 	Description   *string          `json:"description"`
 	CronExpr      *string          `json:"cron_expr"`
 	IntervalSec   *int64           `json:"interval_sec"`
+	Timezone      *string          `json:"timezone"`
 	Payload       *json.RawMessage `json:"payload"`
 	Status        *Status          `json:"status"`
 	MaxExecutions *int64           `json:"max_executions"`

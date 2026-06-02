@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     description     TEXT        NOT NULL DEFAULT '',
     cron_expr       TEXT        NOT NULL DEFAULT '',
     interval_sec    BIGINT,
+    timezone        TEXT        NOT NULL DEFAULT 'UTC',
     payload         JSONB       NOT NULL DEFAULT '{}',
     status          TEXT        NOT NULL DEFAULT 'active',
     max_executions  BIGINT,
@@ -58,9 +59,9 @@ func NewScheduleStore(db *DB) *ScheduleStore { return &ScheduleStore{db: db} }
 
 func (s *ScheduleStore) Insert(ctx context.Context, sch *Schedule) error {
 	_, err := s.db.Exec(ctx,
-		`INSERT INTO schedules (id,name,description,cron_expr,interval_sec,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,$11)`,
-		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec,
+		`INSERT INTO schedules (id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11,$12)`,
+		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec, sch.Timezone,
 		sch.Payload, sch.Status, sch.MaxExecutions, sch.NextRunAt, sch.CreatedAt, sch.UpdatedAt,
 	)
 	if err != nil {
@@ -71,14 +72,14 @@ func (s *ScheduleStore) Insert(ctx context.Context, sch *Schedule) error {
 
 func (s *ScheduleStore) Get(ctx context.Context, id string) (*Schedule, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT id,name,description,cron_expr,interval_sec,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
+		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules WHERE id=$1`, id)
 	return scanSchedule(row)
 }
 
 func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id,name,description,cron_expr,interval_sec,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
+		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules WHERE status != 'deleted' ORDER BY next_run_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list schedules: %w", err)
@@ -101,9 +102,9 @@ func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
 
 func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
 	_, err := s.db.Exec(ctx,
-		`UPDATE schedules SET name=$2,description=$3,cron_expr=$4,interval_sec=$5,payload=$6,
-         status=$7,max_executions=$8,updated_at=$9 WHERE id=$1`,
-		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec,
+		`UPDATE schedules SET name=$2,description=$3,cron_expr=$4,interval_sec=$5,timezone=$6,
+         payload=$7,status=$8,max_executions=$9,updated_at=$10 WHERE id=$1`,
+		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec, sch.Timezone,
 		sch.Payload, sch.Status, sch.MaxExecutions, sch.UpdatedAt,
 	)
 	if err != nil {
@@ -125,7 +126,7 @@ func (s *ScheduleStore) Delete(ctx context.Context, id string) error {
 // locking them with SKIP LOCKED so multiple engine instances don't double-fire.
 func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedule, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id,name,description,cron_expr,interval_sec,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
+		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules
          WHERE status='active' AND next_run_at <= NOW()
          ORDER BY next_run_at ASC
@@ -179,7 +180,7 @@ func scanSchedule(row scannable) (*Schedule, error) {
 	var sch Schedule
 	err := row.Scan(
 		&sch.ID, &sch.Name, &sch.Description,
-		&sch.CronExpr, &sch.IntervalSec, &sch.Payload,
+		&sch.CronExpr, &sch.IntervalSec, &sch.Timezone, &sch.Payload,
 		&sch.Status, &sch.MaxExecutions, &sch.ExecutionCount,
 		&sch.NextRunAt, &sch.CreatedAt, &sch.UpdatedAt,
 	)

@@ -98,6 +98,12 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "max_executions must be greater than 0")
 		return
 	}
+	if in.Timezone != "" {
+		if _, err := time.LoadLocation(in.Timezone); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "invalid timezone: "+err.Error())
+			return
+		}
+	}
 
 	sch, err := s.svc.Create(r.Context(), in)
 	if err != nil {
@@ -127,6 +133,12 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
 		writeError(w, http.StatusUnprocessableEntity, "max_executions must be greater than 0")
 		return
+	}
+	if in.Timezone != nil {
+		if _, err := time.LoadLocation(*in.Timezone); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, "invalid timezone: "+err.Error())
+			return
+		}
 	}
 	sch, err := s.svc.Update(r.Context(), id, in)
 	if err != nil {
