@@ -33,13 +33,28 @@ func New(s Store) *ScheduleService {
 
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
-func nextRun(cronExpr string, intervalSec *int64) (time.Time, error) {
+func loadLocation(timezone string) (*time.Location, error) {
+	if timezone == "" {
+		return time.UTC, nil
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, fmt.Errorf("invalid timezone %q: %w", timezone, err)
+	}
+	return loc, nil
+}
+
+func nextRun(cronExpr string, intervalSec *int64, timezone string) (time.Time, error) {
 	if cronExpr != "" {
 		sched, err := cronParser.Parse(cronExpr)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("invalid cron expression: %w", err)
 		}
-		return sched.Next(time.Now().UTC()), nil
+		loc, err := loadLocation(timezone)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return sched.Next(time.Now().In(loc)), nil
 	}
 	if intervalSec != nil && *intervalSec > 0 {
 		return time.Now().UTC().Add(time.Duration(*intervalSec) * time.Second), nil
@@ -51,7 +66,7 @@ func (s *ScheduleService) Create(ctx context.Context, in store.CreateScheduleInp
 	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
 		return nil, fmt.Errorf("max_executions must be greater than 0")
 	}
-	nr, err := nextRun(in.CronExpr, in.IntervalSec)
+	nr, err := nextRun(in.CronExpr, in.IntervalSec, in.Timezone)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +77,7 @@ func (s *ScheduleService) Create(ctx context.Context, in store.CreateScheduleInp
 		Description:   in.Description,
 		CronExpr:      in.CronExpr,
 		IntervalSec:   in.IntervalSec,
+		Timezone:      in.Timezone,
 		Payload:       in.Payload,
 		Status:        store.StatusActive,
 		MaxExecutions: in.MaxExecutions,
@@ -103,6 +119,12 @@ func (s *ScheduleService) Update(ctx context.Context, id string, in store.Update
 	if in.IntervalSec != nil {
 		sch.IntervalSec = in.IntervalSec
 	}
+	if in.Timezone != nil {
+		if _, err := loadLocation(*in.Timezone); err != nil {
+			return nil, err
+		}
+		sch.Timezone = *in.Timezone
+	}
 	if in.Payload != nil {
 		sch.Payload = *in.Payload
 	}
@@ -142,7 +164,11 @@ func (s *ScheduleService) AdvanceNextRun(ctx context.Context, sch *store.Schedul
 		if err != nil {
 			return fmt.Errorf("parse cron: %w", err)
 		}
-		next = sched.Next(time.Now().UTC())
+		loc, err := loadLocation(sch.Timezone)
+		if err != nil {
+			return err
+		}
+		next = sched.Next(time.Now().In(loc))
 	} else {
 		next = time.Now().UTC().Add(time.Duration(*sch.IntervalSec) * time.Second)
 	}

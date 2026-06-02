@@ -188,6 +188,17 @@ func TestHandleCreate_MaxExecutionsZero(t *testing.T) {
 	}
 }
 
+func TestHandleCreate_InvalidTimezone(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	body, _ := json.Marshal(map[string]any{"name": "tz-job", "cron_expr": "* * * * *", "timezone": "Not/ATimezone"})
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/schedules", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.handleCreate(w, r)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("expected 422, got %d", w.Code)
+	}
+}
+
 func TestHandleCreate_StoreError(t *testing.T) {
 	srv := newTestServer(&mockService{
 		create: func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
@@ -288,6 +299,19 @@ func TestHandleUpdate_MaxExecutionsNegative(t *testing.T) {
 	srv := newTestServer(&mockService{})
 	maxExecutions := int64(-1)
 	body, _ := json.Marshal(store.UpdateScheduleInput{MaxExecutions: &maxExecutions})
+	r := httptest.NewRequest(http.MethodPatch, "/api/v1/schedules/abc", bytes.NewReader(body))
+	r.SetPathValue("id", "abc")
+	w := httptest.NewRecorder()
+	srv.handleUpdate(w, r)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("expected 422, got %d", w.Code)
+	}
+}
+
+func TestHandleUpdate_InvalidTimezone(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	tz := "Not/ATimezone"
+	body, _ := json.Marshal(store.UpdateScheduleInput{Timezone: &tz})
 	r := httptest.NewRequest(http.MethodPatch, "/api/v1/schedules/abc", bytes.NewReader(body))
 	r.SetPathValue("id", "abc")
 	w := httptest.NewRecorder()
