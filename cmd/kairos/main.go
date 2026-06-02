@@ -62,5 +62,7 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("shutting down kairos")
-	server.Shutdown(context.Background())
+	if err := server.Shutdown(context.Background()); err != nil {
+		slog.Error("API server shutdown", "error", err)
+	}
 }

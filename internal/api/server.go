@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -42,13 +43,27 @@ func NewServer(s scheduleService, addr string) *Server {
 	h = loggingMiddleware(h)
 	h = recoveryMiddleware(h)
 
-	srv.srv = &http.Server{Addr: addr, Handler: h}
+	srv.srv = &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	return srv
 }
 
-func (s *Server) Start() error { return s.srv.ListenAndServe() }
+func (s *Server) Start() error {
+	if err := s.srv.ListenAndServe(); err != nil {
+		return fmt.Errorf("http listen: %w", err)
+	}
+	return nil
+}
 
-func (s *Server) Shutdown(ctx context.Context) error { return s.srv.Shutdown(ctx) }
+func (s *Server) Shutdown(ctx context.Context) error {
+	if err := s.srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("http shutdown: %w", err)
+	}
+	return nil
+}
 
 // --- handlers ---
 
@@ -135,7 +150,9 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Error("encode JSON response", "error", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {

@@ -140,7 +140,7 @@ func (s *ScheduleService) AdvanceNextRun(ctx context.Context, sch *store.Schedul
 	if sch.CronExpr != "" {
 		sched, err := cronParser.Parse(sch.CronExpr)
 		if err != nil {
-			return err
+			return fmt.Errorf("parse cron: %w", err)
 		}
 		next = sched.Next(time.Now().UTC())
 	} else {

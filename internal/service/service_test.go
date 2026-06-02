@@ -752,7 +752,9 @@ func TestAdvanceNextRun_Interval_NextTimeInFuture(t *testing.T) {
 		},
 	})
 	sch := &store.Schedule{ID: "s1", IntervalSec: ptr(int64(60))}
-	svc.AdvanceNextRun(context.Background(), sch)
+	if err := svc.AdvanceNextRun(context.Background(), sch); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestAdvanceNextRun_Cron_BelowLimit(t *testing.T) {
@@ -872,7 +874,9 @@ func TestAdvanceNextRun_NoMaxExecutions_NeverCompletes(t *testing.T) {
 		MaxExecutions:  nil,
 		ExecutionCount: 999999,
 	}
-	svc.AdvanceNextRun(context.Background(), sch)
+	if err := svc.AdvanceNextRun(context.Background(), sch); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if completeCalled {
 		t.Error("Complete must not be called when MaxExecutions is nil")
 	}

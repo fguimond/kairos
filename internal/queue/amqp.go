@@ -24,7 +24,7 @@ func NewAMQPPublisher(url, queueName string) (*AMQPPublisher, error) {
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("amqp channel: %w", err)
 	}
 
@@ -38,8 +38,8 @@ func NewAMQPPublisher(url, queueName string) (*AMQPPublisher, error) {
 		nil,
 	)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("queue declare: %w", err)
 	}
 
@@ -47,8 +47,9 @@ func NewAMQPPublisher(url, queueName string) (*AMQPPublisher, error) {
 	return &AMQPPublisher{conn: conn, ch: ch, queueName: queueName}, nil
 }
 
-func (p *AMQPPublisher) Publish(_ context.Context, msg []byte) error {
-	return p.ch.Publish(
+func (p *AMQPPublisher) Publish(ctx context.Context, msg []byte) error {
+	err := p.ch.PublishWithContext(
+		ctx,
 		"",          // default exchange
 		p.queueName, // routing key = queue name
 		false,       // mandatory
@@ -59,9 +60,17 @@ func (p *AMQPPublisher) Publish(_ context.Context, msg []byte) error {
 			Body:         msg,
 		},
 	)
+	if err != nil {
+		return fmt.Errorf("amqp publish: %w", err)
+	}
+	return nil
 }
 
 func (p *AMQPPublisher) Close() {
-	p.ch.Close()
-	p.conn.Close()
+	if err := p.ch.Close(); err != nil {
+		slog.Error("amqp channel close", "error", err)
+	}
+	if err := p.conn.Close(); err != nil {
+		slog.Error("amqp connection close", "error", err)
+	}
 }

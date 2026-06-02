@@ -1,0 +1,28 @@
+version: "2"
+
+run:
+  go: "1.25"
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - govet
+    - revive
+    - gosec
+    - sqlclosecheck
+    - misspell
+    - wrapcheck
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    gosec:
+      excludes:
+        - G101
+    wrapcheck:
+      ignore-package-globs:
+        - "github.com/yourorg/kairos/*"

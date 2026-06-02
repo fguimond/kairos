@@ -111,9 +111,7 @@ func beginTx(_ context.Context, _ Service) (*txWrapper, error) {
 }
 
 func (t *txWrapper) rollback() {
-	if !t.committed {
-		// tx.Rollback(ctx)
-	}
+	// tx.Rollback(ctx) — wire a real pgx transaction here
 }
 
 func (t *txWrapper) commit() {
