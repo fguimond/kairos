@@ -208,6 +208,26 @@ Consumers should be idempotent — use `schedule_id` + `fired_at` as a deduplica
 
 Multiple Kairos instances can run concurrently. The engine uses `SELECT … FOR UPDATE SKIP LOCKED` so each schedule fires exactly once even with N replicas.
 
+## Releases
+
+Releases are automated via [release-please](https://github.com/googleapis/release-please). On every push to `main`, the GitHub Actions workflow (`.github/workflows/release-please.yml`) inspects commit messages and, when there is releasable content, opens or updates a release PR that:
+
+- bumps the version in `.release-please-manifest.json`
+- prepends an entry to `CHANGELOG.md`
+
+Merging that PR creates a GitHub Release and tags the commit.
+
+**Commit message conventions** (follows [Conventional Commits](https://www.conventionalcommits.org/)):
+
+| Prefix | Effect |
+|---|---|
+| `feat:` | minor version bump |
+| `fix:` | patch version bump |
+| `feat!:` / `fix!:` / `BREAKING CHANGE:` | major version bump |
+| `chore:`, `docs:`, `ci:`, `refactor:`, `test:` | no version bump (not included in changelog) |
+
+Commits that do not follow this format are ignored by release-please.
+
 ## Project layout
 
 ```
