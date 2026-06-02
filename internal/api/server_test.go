@@ -48,7 +48,9 @@ func TestHandleHealthz(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 	var body map[string]string
-	json.NewDecoder(w.Body).Decode(&body)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if body["status"] != "ok" {
 		t.Errorf("expected status=ok, got %q", body["status"])
 	}
@@ -68,7 +70,9 @@ func TestHandleList_Happy(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 	var got []*store.Schedule
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if len(got) != 1 || got[0].ID != "1" {
 		t.Errorf("unexpected body: %s", w.Body.String())
 	}
@@ -117,7 +121,9 @@ func TestHandleCreate_HappyCron(t *testing.T) {
 		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	var got store.Schedule
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if got.ID != "abc" {
 		t.Errorf("unexpected schedule ID: %s", got.ID)
 	}
@@ -217,7 +223,9 @@ func TestHandleGet_Happy(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 	var got store.Schedule
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if got.ID != "abc-123" {
 		t.Errorf("unexpected ID: %s", got.ID)
 	}
@@ -257,7 +265,9 @@ func TestHandleUpdate_Happy(t *testing.T) {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var got store.Schedule
-	json.NewDecoder(w.Body).Decode(&got)
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if got.Name != "updated-name" {
 		t.Errorf("unexpected name: %s", got.Name)
 	}

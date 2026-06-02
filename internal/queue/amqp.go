@@ -47,8 +47,9 @@ func NewAMQPPublisher(url, queueName string) (*AMQPPublisher, error) {
 	return &AMQPPublisher{conn: conn, ch: ch, queueName: queueName}, nil
 }
 
-func (p *AMQPPublisher) Publish(_ context.Context, msg []byte) error {
-	err := p.ch.Publish(
+func (p *AMQPPublisher) Publish(ctx context.Context, msg []byte) error {
+	err := p.ch.PublishWithContext(
+		ctx,
 		"",          // default exchange
 		p.queueName, // routing key = queue name
 		false,       // mandatory
