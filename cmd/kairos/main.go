@@ -11,6 +11,7 @@ import (
 	"github.com/yourorg/kairos/internal/config"
 	"github.com/yourorg/kairos/internal/engine"
 	"github.com/yourorg/kairos/internal/queue"
+	"github.com/yourorg/kairos/internal/service"
 	"github.com/yourorg/kairos/internal/store"
 )
 
@@ -39,8 +40,9 @@ func main() {
 	defer publisher.Close()
 
 	scheduleStore := store.NewScheduleStore(db)
-	triggerEngine := engine.New(scheduleStore, publisher, cfg.PollInterval)
-	server := api.NewServer(scheduleStore, cfg.ListenAddr)
+	scheduleService := service.New(scheduleStore)
+	triggerEngine := engine.New(scheduleService, publisher, cfg.PollInterval)
+	server := api.NewServer(scheduleService, cfg.ListenAddr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

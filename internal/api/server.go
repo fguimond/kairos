@@ -12,7 +12,7 @@ import (
 	"github.com/yourorg/kairos/internal/store"
 )
 
-type scheduleStore interface {
+type scheduleService interface {
 	List(ctx context.Context) ([]*store.Schedule, error)
 	Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
 	Get(ctx context.Context, id string) (*store.Schedule, error)
@@ -21,12 +21,12 @@ type scheduleStore interface {
 }
 
 type Server struct {
-	srv   *http.Server
-	store scheduleStore
+	srv *http.Server
+	svc scheduleService
 }
 
-func NewServer(s scheduleStore, addr string) *Server {
-	srv := &Server{store: s}
+func NewServer(s scheduleService, addr string) *Server {
+	srv := &Server{svc: s}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
@@ -57,7 +57,7 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
-	schedules, err := s.store.List(r.Context())
+	schedules, err := s.svc.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -84,7 +84,7 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sch, err := s.store.Create(r.Context(), in)
+	sch, err := s.svc.Create(r.Context(), in)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -94,7 +94,7 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sch, err := s.store.Get(r.Context(), id)
+	sch, err := s.svc.Get(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -113,7 +113,7 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "max_executions must be greater than 0")
 		return
 	}
-	sch, err := s.store.Update(r.Context(), id, in)
+	sch, err := s.svc.Update(r.Context(), id, in)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -123,7 +123,7 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := s.store.Delete(r.Context(), id); err != nil {
+	if err := s.svc.Delete(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

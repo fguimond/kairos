@@ -15,8 +15,8 @@ type Publisher interface {
 	Publish(ctx context.Context, msg []byte) error
 }
 
-// Store is the interface the engine uses to query and advance schedules.
-type Store interface {
+// Service is the interface the engine uses to query and advance schedules.
+type Service interface {
 	DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error)
 	AdvanceNextRun(ctx context.Context, sch *store.Schedule) error
 }
@@ -31,15 +31,15 @@ type TriggerMessage struct {
 
 // Engine polls the schedule store and fires due schedules.
 type Engine struct {
-	store        Store
+	svc          Service
 	publisher    Publisher
 	pollInterval time.Duration
 	batchSize    int
 }
 
-func New(s Store, p Publisher, pollInterval time.Duration) *Engine {
+func New(s Service, p Publisher, pollInterval time.Duration) *Engine {
 	return &Engine{
-		store:        s,
+		svc:          s,
 		publisher:    p,
 		pollInterval: pollInterval,
 		batchSize:    100,
@@ -61,14 +61,14 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 func (e *Engine) tick(ctx context.Context) {
-	tx, err := beginTx(ctx, e.store)
+	tx, err := beginTx(ctx, e.svc)
 	if err != nil {
 		slog.Error("engine: begin tx", "error", err)
 		return
 	}
 	defer tx.rollback()
 
-	schedules, err := e.store.DueSchedules(ctx, e.batchSize)
+	schedules, err := e.svc.DueSchedules(ctx, e.batchSize)
 	if err != nil {
 		slog.Error("engine: query due schedules", "error", err)
 		return
@@ -88,7 +88,7 @@ func (e *Engine) tick(ctx context.Context) {
 			continue // leave next_run_at unchanged; will retry next tick
 		}
 
-		if err := e.store.AdvanceNextRun(ctx, sch); err != nil {
+		if err := e.svc.AdvanceNextRun(ctx, sch); err != nil {
 			slog.Error("engine: advance next run", "error", err, "schedule_id", sch.ID)
 		} else {
 			slog.Info("trigger fired", "schedule_id", sch.ID, "name", sch.Name)
@@ -104,7 +104,7 @@ type txWrapper struct {
 	committed bool
 }
 
-func beginTx(_ context.Context, _ Store) (*txWrapper, error) {
+func beginTx(_ context.Context, _ Service) (*txWrapper, error) {
 	// In production, begin a real pgx transaction and pass it through the store calls.
 	// This stub keeps the engine package free of pgx imports — swap in a real tx here.
 	return &txWrapper{}, nil

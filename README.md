@@ -37,6 +37,38 @@ Or run everything in Docker:
 docker compose up --build
 ```
 
+## Testing
+
+### Unit tests
+
+No infrastructure required. Run the full suite with:
+
+```bash
+go test ./...
+```
+
+### Integration tests
+
+Integration tests are gated behind the `integration` build tag and require live infrastructure. Start the dependencies first:
+
+```bash
+docker compose up -d postgres rabbitmq
+```
+
+| Package              | Dependency | Command                                              |
+|----------------------|------------|------------------------------------------------------|
+| `internal/store`     | Postgres   | `go test -tags=integration ./internal/store/...`    |
+| `internal/queue`     | RabbitMQ   | `go test -tags=integration ./internal/queue/...`    |
+| All integration      | Both       | `go test -tags=integration ./...`                   |
+
+Tests skip gracefully when their dependency is not reachable, so running with `-tags=integration` is safe even if only one service is up.
+
+To run a specific test by name:
+
+```bash
+go test -tags=integration ./internal/store/... -run TestInsert_RoundTripsAllFields
+```
+
 ## Environment variables
 
 | Variable           | Default                                                          | Description                       |

@@ -14,14 +14,15 @@ go run ./cmd/kairos
 # Build binary
 go build -o kairos ./cmd/kairos
 
-# Run all tests
+# Run all unit tests
 go test ./...
 
-# Run a single package's tests
-go test ./internal/store/...
+# Run integration tests (requires Postgres via docker compose up -d postgres)
+go test -tags=integration ./internal/store/...
 
 # Run a single test by name
 go test ./internal/store/... -run TestFunctionName
+go test -tags=integration ./internal/store/... -run TestFunctionName
 ```
 
 No linter is configured yet. The standard `go vet ./...` applies.
