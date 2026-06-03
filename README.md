@@ -71,18 +71,18 @@ go test -tags=integration ./internal/store/... -run TestInsert_RoundTripsAllFiel
 
 ## Environment variables
 
-| Variable           | Default                                                          | Description                                         |
-|--------------------|------------------------------------------------------------------|-----------------------------------------------------|
-| `LISTEN_ADDR`      | `:8080`                                                          | HTTP listen address                                 |
-| `DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                                        |
-| `AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string                          |
-| `QUEUE_NAME`       | `kairos.triggers`                                                | Queue to publish trigger messages                   |
-| `POLL_INTERVAL_MS` | `5000`                                                           | How often the engine polls (ms)                     |
-| `API_KEY`          | *(unset — auth disabled)*                                        | Bearer token required on all requests (except `/healthz`) |
+| Variable                  | Default                                                          | Description                                         |
+|---------------------------|------------------------------------------------------------------|-----------------------------------------------------|
+| `KAIROS_LISTEN_ADDR`      | `:8080`                                                          | HTTP listen address                                 |
+| `KAIROS_DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                                        |
+| `KAIROS_AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string                          |
+| `KAIROS_QUEUE_NAME`       | `kairos.triggers`                                                | Queue to publish trigger messages                   |
+| `KAIROS_POLL_INTERVAL_MS` | `5000`                                                           | How often the engine polls (ms)                     |
+| `KAIROS_API_KEY`          | *(unset — auth disabled)*                                        | Bearer token required on all requests (except `/healthz`) |
 
 ## Authentication
 
-When `API_KEY` is set, every request (except `GET /healthz`) must include the key as a Bearer token:
+When `KAIROS_API_KEY` is set, every request (except `GET /healthz`) must include the key as a Bearer token:
 
 ```
 Authorization: Bearer <your-api-key>
@@ -94,7 +94,7 @@ Generate a key:
 openssl rand -base64 32
 ```
 
-Requests without the header, or with a wrong key, receive `401 Unauthorized`. When `API_KEY` is unset the service accepts all requests — useful during local development.
+Requests without the header, or with a wrong key, receive `401 Unauthorized`. When `KAIROS_API_KEY` is unset the service accepts all requests — useful during local development.
 
 ## REST API
 
@@ -221,7 +221,7 @@ Output per fired job:
   payload:       {"report_type":"daily"}
 ```
 
-The consumer reads `AMQP_URL` and `QUEUE_NAME` from the environment, using the same defaults as the main service.
+The consumer reads `KAIROS_AMQP_URL` and `KAIROS_QUEUE_NAME` from the environment, using the same defaults as the main service.
 
 ## Queue message format
 
