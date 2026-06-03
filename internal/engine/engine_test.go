@@ -11,8 +11,17 @@ import (
 )
 
 type mockService struct {
+	beginTx        func(ctx context.Context) (context.Context, func() error, func() error, error)
 	dueSchedules   func(ctx context.Context, limit int) ([]*store.Schedule, error)
 	advanceNextRun func(ctx context.Context, sch *store.Schedule) error
+}
+
+func (m *mockService) BeginTx(ctx context.Context) (context.Context, func() error, func() error, error) {
+	if m.beginTx != nil {
+		return m.beginTx(ctx)
+	}
+	noop := func() error { return nil }
+	return ctx, noop, noop, nil
 }
 
 func (m *mockService) DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error) {
@@ -197,6 +206,27 @@ func TestTick_PublishError_ContinuesToNextSchedule(t *testing.T) {
 	}
 	if advanced != 1 {
 		t.Errorf("expected 1 advance (only the successful publish), got %d", advanced)
+	}
+}
+
+func TestTick_BeginTxError_NoPublishOrAdvance(t *testing.T) {
+	published := 0
+	advanced := 0
+
+	e := newTestEngine(
+		&mockService{
+			beginTx: func(ctx context.Context) (context.Context, func() error, func() error, error) {
+				noop := func() error { return nil }
+				return ctx, noop, noop, errors.New("db unavailable")
+			},
+			dueSchedules:   func(ctx context.Context, limit int) ([]*store.Schedule, error) { return nil, nil },
+			advanceNextRun: func(ctx context.Context, s *store.Schedule) error { advanced++; return nil },
+		},
+		&mockPublisher{publish: func(ctx context.Context, msg []byte) error { published++; return nil }},
+	)
+	e.tick(context.Background())
+	if published != 0 || advanced != 0 {
+		t.Errorf("expected no publish/advance when BeginTx fails, got published=%d advanced=%d", published, advanced)
 	}
 }
 

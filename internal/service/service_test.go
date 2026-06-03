@@ -13,6 +13,7 @@ import (
 // --- mock store ---
 
 type mockStore struct {
+	beginTxFn      func(ctx context.Context) (context.Context, func() error, func() error, error)
 	insertFn       func(ctx context.Context, sch *store.Schedule) error
 	getFn          func(ctx context.Context, id string) (*store.Schedule, error)
 	listFn         func(ctx context.Context) ([]*store.Schedule, error)
@@ -21,6 +22,14 @@ type mockStore struct {
 	dueSchedulesFn func(ctx context.Context, limit int) ([]*store.Schedule, error)
 	completeFn     func(ctx context.Context, id string, count int64) error
 	setNextRunFn   func(ctx context.Context, id string, next time.Time, count int64) error
+}
+
+func (m *mockStore) BeginTx(ctx context.Context) (context.Context, func() error, func() error, error) {
+	if m.beginTxFn != nil {
+		return m.beginTxFn(ctx)
+	}
+	noop := func() error { return nil }
+	return ctx, noop, noop, nil
 }
 
 func (m *mockStore) Insert(ctx context.Context, sch *store.Schedule) error {
@@ -351,6 +360,27 @@ func TestCreate_NoCronNoInterval(t *testing.T) {
 	}
 }
 
+func TestCreate_BeginTxError(t *testing.T) {
+	insertCalled := false
+	svc := newSvc(&mockStore{
+		beginTxFn: func(ctx context.Context) (context.Context, func() error, func() error, error) {
+			noop := func() error { return nil }
+			return ctx, noop, noop, errors.New("db unavailable")
+		},
+		insertFn: func(_ context.Context, _ *store.Schedule) error { insertCalled = true; return nil },
+	})
+	_, err := svc.Create(context.Background(), store.CreateScheduleInput{
+		Name:     "x",
+		CronExpr: "* * * * *",
+	})
+	if err == nil {
+		t.Error("expected error when BeginTx fails")
+	}
+	if insertCalled {
+		t.Error("Insert must not be called when BeginTx fails")
+	}
+}
+
 func TestCreate_InsertError(t *testing.T) {
 	svc := newSvc(&mockStore{
 		insertFn: func(_ context.Context, _ *store.Schedule) error {
@@ -665,6 +695,27 @@ func TestUpdate_ValidTimezone(t *testing.T) {
 	}
 }
 
+func TestUpdate_BeginTxError(t *testing.T) {
+	getCalled := false
+	svc := newSvc(&mockStore{
+		beginTxFn: func(ctx context.Context) (context.Context, func() error, func() error, error) {
+			noop := func() error { return nil }
+			return ctx, noop, noop, errors.New("db unavailable")
+		},
+		getFn: func(_ context.Context, _ string) (*store.Schedule, error) {
+			getCalled = true
+			return baseSchedule(), nil
+		},
+	})
+	_, err := svc.Update(context.Background(), "x", store.UpdateScheduleInput{})
+	if err == nil {
+		t.Error("expected error when BeginTx fails")
+	}
+	if getCalled {
+		t.Error("Get must not be called when BeginTx fails")
+	}
+}
+
 func TestUpdate_GetError(t *testing.T) {
 	saveCalled := false
 	svc := newSvc(&mockStore{
@@ -709,6 +760,23 @@ func TestDelete_HappyPath(t *testing.T) {
 	}
 }
 
+func TestDelete_BeginTxError(t *testing.T) {
+	deleteCalled := false
+	svc := newSvc(&mockStore{
+		beginTxFn: func(ctx context.Context) (context.Context, func() error, func() error, error) {
+			noop := func() error { return nil }
+			return ctx, noop, noop, errors.New("db unavailable")
+		},
+		deleteFn: func(_ context.Context, _ string) error { deleteCalled = true; return nil },
+	})
+	if err := svc.Delete(context.Background(), "x"); err == nil {
+		t.Error("expected error when BeginTx fails")
+	}
+	if deleteCalled {
+		t.Error("Delete must not be called when BeginTx fails")
+	}
+}
+
 func TestDelete_StoreError(t *testing.T) {
 	svc := newSvc(&mockStore{
 		deleteFn: func(_ context.Context, _ string) error { return errors.New("db error") },
@@ -719,6 +787,19 @@ func TestDelete_StoreError(t *testing.T) {
 }
 
 // --- DueSchedules ---
+
+func TestDueSchedules_BeginTxError(t *testing.T) {
+	svc := newSvc(&mockStore{
+		beginTxFn: func(ctx context.Context) (context.Context, func() error, func() error, error) {
+			noop := func() error { return nil }
+			return ctx, noop, noop, errors.New("db unavailable")
+		},
+	})
+	_, err := svc.DueSchedules(context.Background(), 10)
+	if err == nil {
+		t.Error("expected error when BeginTx fails")
+	}
+}
 
 func TestDueSchedules_HappyPath(t *testing.T) {
 	expected := []*store.Schedule{{ID: "s1"}, {ID: "s2"}}
@@ -752,6 +833,19 @@ func TestDueSchedules_StoreError(t *testing.T) {
 }
 
 // --- AdvanceNextRun ---
+
+func TestAdvanceNextRun_BeginTxError(t *testing.T) {
+	svc := newSvc(&mockStore{
+		beginTxFn: func(ctx context.Context) (context.Context, func() error, func() error, error) {
+			noop := func() error { return nil }
+			return ctx, noop, noop, errors.New("db unavailable")
+		},
+	})
+	sch := &store.Schedule{ID: "s1", CronExpr: "* * * * *"}
+	if err := svc.AdvanceNextRun(context.Background(), sch); err == nil {
+		t.Error("expected error when BeginTx fails")
+	}
+}
 
 func TestAdvanceNextRun_OneShot_NoInterval(t *testing.T) {
 	completedID := ""
