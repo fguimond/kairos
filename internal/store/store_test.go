@@ -95,6 +95,125 @@ func approxNow(t *testing.T, label string, ts time.Time) {
 	}
 }
 
+// --- BeginTx ---
+
+func TestBeginTx_CommitPersistsChanges(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	txCtx, commit, rollback, err := s.BeginTx(context.Background())
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	defer rollback() //nolint:errcheck
+
+	if err := s.Insert(txCtx, makeSchedule("tx-commit", "test", future())); err != nil {
+		t.Fatalf("Insert in tx: %v", err)
+	}
+	if err := commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	got, err := s.Get(context.Background(), "tx-commit")
+	if err != nil {
+		t.Fatalf("Get after commit: %v", err)
+	}
+	if got.ID != "tx-commit" {
+		t.Errorf("expected id tx-commit, got %q", got.ID)
+	}
+}
+
+func TestBeginTx_RollbackDiscardsChanges(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	txCtx, _, rollback, err := s.BeginTx(context.Background())
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	if err := s.Insert(txCtx, makeSchedule("tx-rollback", "test", future())); err != nil {
+		t.Fatalf("Insert in tx: %v", err)
+	}
+	if err := rollback(); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+
+	_, err = s.Get(context.Background(), "tx-rollback")
+	if err == nil {
+		t.Error("expected schedule not found after rollback, got nil error")
+	}
+	if err.Error() != "schedule not found" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBeginTx_NestedJoinsOuterTransaction(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	outerCtx, _, rollback, err := s.BeginTx(context.Background())
+	if err != nil {
+		t.Fatalf("outer BeginTx: %v", err)
+	}
+	defer rollback() //nolint:errcheck
+
+	if err := s.Insert(outerCtx, makeSchedule("outer-id", "test", future())); err != nil {
+		t.Fatalf("Insert in outer tx: %v", err)
+	}
+
+	// Inner BeginTx should join the outer transaction, not start a new one.
+	innerCtx, innerCommit, innerRollback, err := s.BeginTx(outerCtx)
+	if err != nil {
+		t.Fatalf("inner BeginTx: %v", err)
+	}
+	if innerCtx != outerCtx {
+		t.Error("expected inner BeginTx to return the same context when joining outer tx")
+	}
+	if err := s.Insert(innerCtx, makeSchedule("inner-id", "test", future())); err != nil {
+		t.Fatalf("Insert in inner tx: %v", err)
+	}
+	// Inner commit/rollback are no-ops; outer transaction still controls the boundary.
+	if err := innerCommit(); err != nil {
+		t.Fatalf("inner commit: %v", err)
+	}
+	if err := innerRollback(); err != nil {
+		t.Fatalf("inner rollback: %v", err)
+	}
+
+	// Roll back the outer transaction — both inserts must be discarded.
+	if err := rollback(); err != nil {
+		t.Fatalf("outer rollback: %v", err)
+	}
+
+	for _, id := range []string{"outer-id", "inner-id"} {
+		_, err := s.Get(context.Background(), id)
+		if err == nil {
+			t.Errorf("expected %q not found after outer rollback", id)
+		}
+	}
+}
+
+func TestBeginTx_RollbackAfterCommitIsNoop(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	_, commit, rollback, err := s.BeginTx(context.Background())
+	if err != nil {
+		t.Fatalf("BeginTx: %v", err)
+	}
+	if err := commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if err := rollback(); err != nil {
+		t.Errorf("rollback after commit should be a no-op, got: %v", err)
+	}
+}
+
 // --- Migrate ---
 
 func TestMigrate_Idempotent(t *testing.T) {

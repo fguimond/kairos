@@ -12,6 +12,7 @@ import (
 
 // Store is the data-access interface the service depends on.
 type Store interface {
+	BeginTx(ctx context.Context) (context.Context, func() error, func() error, error)
 	Insert(ctx context.Context, sch *store.Schedule) error
 	Get(ctx context.Context, id string) (*store.Schedule, error)
 	List(ctx context.Context) ([]*store.Schedule, error)
@@ -62,6 +63,10 @@ func nextRun(cronExpr string, intervalSec *int64, timezone string) (time.Time, e
 	return time.Time{}, fmt.Errorf("either cron_expr or interval_sec must be provided")
 }
 
+func (s *ScheduleService) BeginTx(ctx context.Context) (context.Context, func() error, func() error, error) {
+	return s.store.BeginTx(ctx)
+}
+
 func (s *ScheduleService) Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
 	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
 		return nil, fmt.Errorf("max_executions must be greater than 0")
@@ -85,7 +90,16 @@ func (s *ScheduleService) Create(ctx context.Context, in store.CreateScheduleInp
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
-	if err := s.store.Insert(ctx, sch); err != nil {
+	txCtx, commit, rollback, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rollback() //nolint:errcheck
+
+	if err := s.store.Insert(txCtx, sch); err != nil {
+		return nil, err
+	}
+	if err := commit(); err != nil {
 		return nil, err
 	}
 	return sch, nil
@@ -103,7 +117,13 @@ func (s *ScheduleService) Update(ctx context.Context, id string, in store.Update
 	if in.MaxExecutions != nil && *in.MaxExecutions <= 0 {
 		return nil, fmt.Errorf("max_executions must be greater than 0")
 	}
-	sch, err := s.store.Get(ctx, id)
+	txCtx, commit, rollback, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rollback() //nolint:errcheck
+
+	sch, err := s.store.Get(txCtx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -135,18 +155,43 @@ func (s *ScheduleService) Update(ctx context.Context, id string, in store.Update
 		sch.MaxExecutions = in.MaxExecutions
 	}
 	sch.UpdatedAt = time.Now().UTC()
-	if err := s.store.Save(ctx, sch); err != nil {
+	if err := s.store.Save(txCtx, sch); err != nil {
+		return nil, err
+	}
+	if err := commit(); err != nil {
 		return nil, err
 	}
 	return sch, nil
 }
 
 func (s *ScheduleService) Delete(ctx context.Context, id string) error {
-	return s.store.Delete(ctx, id)
+	txCtx, commit, rollback, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollback() //nolint:errcheck
+
+	if err := s.store.Delete(txCtx, id); err != nil {
+		return err
+	}
+	return commit()
 }
 
 func (s *ScheduleService) DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error) {
-	return s.store.DueSchedules(ctx, limit)
+	txCtx, commit, rollback, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rollback() //nolint:errcheck
+
+	schedules, err := s.store.DueSchedules(txCtx, limit)
+	if err != nil {
+		return nil, err
+	}
+	if err := commit(); err != nil {
+		return nil, err
+	}
+	return schedules, nil
 }
 
 func (s *ScheduleService) AdvanceNextRun(ctx context.Context, sch *store.Schedule) error {
@@ -154,8 +199,17 @@ func (s *ScheduleService) AdvanceNextRun(ctx context.Context, sch *store.Schedul
 	limitReached := sch.MaxExecutions != nil && sch.ExecutionCount >= *sch.MaxExecutions
 	oneShot := sch.CronExpr == "" && (sch.IntervalSec == nil || *sch.IntervalSec <= 0)
 
+	txCtx, commit, rollback, err := s.store.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollback() //nolint:errcheck
+
 	if limitReached || oneShot {
-		return s.store.Complete(ctx, sch.ID, sch.ExecutionCount)
+		if err := s.store.Complete(txCtx, sch.ID, sch.ExecutionCount); err != nil {
+			return err
+		}
+		return commit()
 	}
 
 	var next time.Time
@@ -173,5 +227,8 @@ func (s *ScheduleService) AdvanceNextRun(ctx context.Context, sch *store.Schedul
 		next = time.Now().UTC().Add(time.Duration(*sch.IntervalSec) * time.Second)
 	}
 
-	return s.store.SetNextRun(ctx, sch.ID, next, sch.ExecutionCount)
+	if err := s.store.SetNextRun(txCtx, sch.ID, next, sch.ExecutionCount); err != nil {
+		return err
+	}
+	return commit()
 }

@@ -7,11 +7,22 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // DB is a thin alias so callers don't import pgxpool directly.
 type DB = pgxpool.Pool
+
+// dbtx is the minimal query interface satisfied by both *pgxpool.Pool and pgx.Tx,
+// allowing store methods to run against either a pool connection or a transaction.
+type dbtx interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+type txKey struct{}
 
 func Connect(dsn string) (*DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -53,12 +64,59 @@ func Migrate(db *DB) error {
 }
 
 // ScheduleStore is the data-access layer for schedules.
-type ScheduleStore struct{ db *DB }
+type ScheduleStore struct{ pool *pgxpool.Pool }
 
-func NewScheduleStore(db *DB) *ScheduleStore { return &ScheduleStore{db: db} }
+func NewScheduleStore(db *DB) *ScheduleStore { return &ScheduleStore{pool: db} }
+
+// conn returns the active transaction from ctx if one was started via BeginTx,
+// otherwise falls back to the pool (auto-commit).
+func (s *ScheduleStore) conn(ctx context.Context) dbtx {
+	if tx, ok := ctx.Value(txKey{}).(pgx.Tx); ok {
+		return tx
+	}
+	return s.pool
+}
+
+// BeginTx starts a database transaction and returns a derived context that
+// carries it. All store methods called with txCtx will run inside the same
+// transaction. The caller must call commit or rollback exactly once; calling
+// rollback after a successful commit is safe and returns nil.
+//
+// If ctx already carries a transaction (i.e. the caller is nested inside an
+// outer BeginTx), BeginTx joins it: commit and rollback are no-ops and the
+// outer transaction owns the boundary.
+func (s *ScheduleStore) BeginTx(ctx context.Context) (txCtx context.Context, commit func() error, rollback func() error, err error) {
+	if _, ok := ctx.Value(txKey{}).(pgx.Tx); ok {
+		noop := func() error { return nil }
+		return ctx, noop, noop, nil
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		noop := func() error { return nil }
+		return ctx, noop, noop, fmt.Errorf("begin tx: %w", err)
+	}
+	txCtx = context.WithValue(ctx, txKey{}, tx)
+	commit = func() error {
+		if err := tx.Commit(txCtx); err != nil {
+			return fmt.Errorf("commit: %w", err)
+		}
+		return nil
+	}
+	rollback = func() error {
+		err := tx.Rollback(txCtx)
+		if errors.Is(err, pgx.ErrTxClosed) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("rollback: %w", err)
+		}
+		return nil
+	}
+	return txCtx, commit, rollback, nil
+}
 
 func (s *ScheduleStore) Insert(ctx context.Context, sch *Schedule) error {
-	_, err := s.db.Exec(ctx,
+	_, err := s.conn(ctx).Exec(ctx,
 		`INSERT INTO schedules (id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,$10,$11,$12)`,
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec, sch.Timezone,
@@ -71,14 +129,14 @@ func (s *ScheduleStore) Insert(ctx context.Context, sch *Schedule) error {
 }
 
 func (s *ScheduleStore) Get(ctx context.Context, id string) (*Schedule, error) {
-	row := s.db.QueryRow(ctx,
+	row := s.conn(ctx).QueryRow(ctx,
 		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules WHERE id=$1`, id)
 	return scanSchedule(row)
 }
 
 func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
-	rows, err := s.db.Query(ctx,
+	rows, err := s.conn(ctx).Query(ctx,
 		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules WHERE status != 'deleted' ORDER BY next_run_at ASC`)
 	if err != nil {
@@ -101,7 +159,7 @@ func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
 }
 
 func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
-	_, err := s.db.Exec(ctx,
+	_, err := s.conn(ctx).Exec(ctx,
 		`UPDATE schedules SET name=$2,description=$3,cron_expr=$4,interval_sec=$5,timezone=$6,
          payload=$7,status=$8,max_executions=$9,updated_at=$10 WHERE id=$1`,
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec, sch.Timezone,
@@ -114,7 +172,7 @@ func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
 }
 
 func (s *ScheduleStore) Delete(ctx context.Context, id string) error {
-	_, err := s.db.Exec(ctx,
+	_, err := s.conn(ctx).Exec(ctx,
 		`UPDATE schedules SET status='deleted', updated_at=NOW() WHERE id=$1`, id)
 	if err != nil {
 		return fmt.Errorf("delete schedule: %w", err)
@@ -124,8 +182,10 @@ func (s *ScheduleStore) Delete(ctx context.Context, id string) error {
 
 // DueSchedules returns up to limit active schedules whose next_run_at is in the past,
 // locking them with SKIP LOCKED so multiple engine instances don't double-fire.
+// Must be called with a context carrying a transaction (via BeginTx) so the row
+// locks are held until AdvanceNextRun commits.
 func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedule, error) {
-	rows, err := s.db.Query(ctx,
+	rows, err := s.conn(ctx).Query(ctx,
 		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
          FROM schedules
          WHERE status='active' AND next_run_at <= NOW()
@@ -152,7 +212,7 @@ func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedul
 }
 
 func (s *ScheduleStore) Complete(ctx context.Context, id string, count int64) error {
-	_, err := s.db.Exec(ctx,
+	_, err := s.conn(ctx).Exec(ctx,
 		`UPDATE schedules SET status='completed', execution_count=$2, updated_at=NOW() WHERE id=$1`,
 		id, count)
 	if err != nil {
@@ -162,7 +222,7 @@ func (s *ScheduleStore) Complete(ctx context.Context, id string, count int64) er
 }
 
 func (s *ScheduleStore) SetNextRun(ctx context.Context, id string, next time.Time, count int64) error {
-	_, err := s.db.Exec(ctx,
+	_, err := s.conn(ctx).Exec(ctx,
 		`UPDATE schedules SET next_run_at=$2, execution_count=$3, updated_at=NOW() WHERE id=$1`,
 		id, next, count)
 	if err != nil {

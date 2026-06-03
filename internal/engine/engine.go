@@ -17,6 +17,7 @@ type Publisher interface {
 
 // Service is the interface the engine uses to query and advance schedules.
 type Service interface {
+	BeginTx(ctx context.Context) (context.Context, func() error, func() error, error)
 	DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error)
 	AdvanceNextRun(ctx context.Context, sch *store.Schedule) error
 }
@@ -61,14 +62,14 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 func (e *Engine) tick(ctx context.Context) {
-	tx, err := beginTx(ctx, e.svc)
+	txCtx, commit, rollback, err := e.svc.BeginTx(ctx)
 	if err != nil {
 		slog.Error("engine: begin tx", "error", err)
 		return
 	}
-	defer tx.rollback()
+	defer rollback() //nolint:errcheck
 
-	schedules, err := e.svc.DueSchedules(ctx, e.batchSize)
+	schedules, err := e.svc.DueSchedules(txCtx, e.batchSize)
 	if err != nil {
 		slog.Error("engine: query due schedules", "error", err)
 		return
@@ -88,33 +89,14 @@ func (e *Engine) tick(ctx context.Context) {
 			continue // leave next_run_at unchanged; will retry next tick
 		}
 
-		if err := e.svc.AdvanceNextRun(ctx, sch); err != nil {
+		if err := e.svc.AdvanceNextRun(txCtx, sch); err != nil {
 			slog.Error("engine: advance next run", "error", err, "schedule_id", sch.ID)
 		} else {
 			slog.Info("trigger fired", "schedule_id", sch.ID, "name", sch.Name)
 		}
 	}
 
-	tx.commit()
-}
-
-// txWrapper is a lightweight helper so the tick function can defer a rollback
-// without importing pgx directly. A real implementation would wrap pgxpool.Tx.
-type txWrapper struct {
-	committed bool
-}
-
-func beginTx(_ context.Context, _ Service) (*txWrapper, error) {
-	// In production, begin a real pgx transaction and pass it through the store calls.
-	// This stub keeps the engine package free of pgx imports — swap in a real tx here.
-	return &txWrapper{}, nil
-}
-
-func (t *txWrapper) rollback() {
-	// tx.Rollback(ctx) — wire a real pgx transaction here
-}
-
-func (t *txWrapper) commit() {
-	t.committed = true
-	// tx.Commit(ctx)
+	if err := commit(); err != nil {
+		slog.Error("engine: commit tx", "error", err)
+	}
 }
