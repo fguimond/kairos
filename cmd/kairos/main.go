@@ -42,7 +42,7 @@ func main() {
 	scheduleStore := store.NewScheduleStore(db)
 	scheduleService := service.New(scheduleStore)
 	triggerEngine := engine.New(scheduleService, publisher, cfg.PollInterval)
-	server := api.NewServer(scheduleService, cfg.ListenAddr)
+	server := api.NewServer(scheduleService, cfg.ListenAddr, cfg.APIKey)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
