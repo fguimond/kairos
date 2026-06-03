@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"log/slog"
@@ -26,7 +28,7 @@ type Server struct {
 	svc scheduleService
 }
 
-func NewServer(s scheduleService, addr string) *Server {
+func NewServer(s scheduleService, addr string, apiKey string) *Server {
 	srv := &Server{svc: s}
 
 	mux := http.NewServeMux()
@@ -42,6 +44,9 @@ func NewServer(s scheduleService, addr string) *Server {
 	var h http.Handler = mux
 	h = loggingMiddleware(h)
 	h = recoveryMiddleware(h)
+	if apiKey != "" {
+		h = apiKeyMiddleware(apiKey)(h)
+	}
 
 	srv.srv = &http.Server{
 		Addr:              addr,
@@ -179,6 +184,23 @@ type statusResponseWriter struct {
 func (rw *statusResponseWriter) WriteHeader(status int) {
 	rw.status = status
 	rw.ResponseWriter.WriteHeader(status)
+}
+
+func apiKeyMiddleware(key string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/healthz" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if subtle.ConstantTimeCompare([]byte(token), []byte(key)) != 1 {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {

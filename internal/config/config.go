@@ -12,6 +12,7 @@ type Config struct {
 	AMQPURL      string
 	QueueName    string
 	PollInterval time.Duration
+	APIKey       string
 }
 
 func Load() Config {
@@ -21,6 +22,7 @@ func Load() Config {
 		AMQPURL:      getEnv("AMQP_URL", "amqp://guest:guest@localhost:5672/"),
 		QueueName:    getEnv("QUEUE_NAME", "kairos.triggers"),
 		PollInterval: getDuration("POLL_INTERVAL_MS", 5000),
+		APIKey:       getEnv("API_KEY", ""),
 	}
 }
 
