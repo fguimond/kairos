@@ -17,12 +17,12 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		ListenAddr:   getEnv("LISTEN_ADDR", ":8080"),
-		DatabaseURL:  getEnv("DATABASE_URL", "postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable"),
-		AMQPURL:      getEnv("AMQP_URL", "amqp://guest:guest@localhost:5672/"),
-		QueueName:    getEnv("QUEUE_NAME", "kairos.triggers"),
-		PollInterval: getDuration("POLL_INTERVAL_MS", 5000),
-		APIKey:       getEnv("API_KEY", ""),
+		ListenAddr:   getEnv("KAIROS_LISTEN_ADDR", ":8080"),
+		DatabaseURL:  getEnv("KAIROS_DATABASE_URL", "postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable"),
+		AMQPURL:      getEnv("KAIROS_AMQP_URL", "amqp://guest:guest@localhost:5672/"),
+		QueueName:    getEnv("KAIROS_QUEUE_NAME", "kairos.triggers"),
+		PollInterval: getDuration("KAIROS_POLL_INTERVAL_MS", 5000),
+		APIKey:       getEnv("KAIROS_API_KEY", ""),
 	}
 }
 

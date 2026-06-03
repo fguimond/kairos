@@ -16,7 +16,7 @@ import (
 var testDB *DB
 
 func TestMain(m *testing.M) {
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv("KAIROS_DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable"
 	}

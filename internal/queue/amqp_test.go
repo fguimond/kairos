@@ -13,7 +13,7 @@ import (
 )
 
 func testAMQPURL() string {
-	if u := os.Getenv("AMQP_URL"); u != "" {
+	if u := os.Getenv("KAIROS_AMQP_URL"); u != "" {
 		return u
 	}
 	return "amqp://guest:guest@localhost:5672/"
