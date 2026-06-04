@@ -28,13 +28,36 @@ Message Queue  (RabbitMQ)
 
 ```bash
 docker compose up -d postgres rabbitmq
-go run ./cmd/kairos
+go run ./cmd/kairos run
 ```
 
 Or run everything in Docker:
 
 ```bash
 docker compose up --build
+```
+
+## CLI
+
+Kairos exposes the following subcommands:
+
+| Command       | Description                                                |
+|---------------|------------------------------------------------------------|
+| `run`         | Start the HTTP API server and the background trigger engine |
+| `version`     | Print the build version (or `development` for local builds) |
+| `completion`  | Generate shell completion (`bash`, `zsh`, `fish`, `powershell`) |
+| `help`        | Print the usage message for any command                    |
+
+Run `kairos help` or `kairos <command> --help` for full usage information.
+
+### Shell completion
+
+```bash
+# Bash (current shell)
+source <(kairos completion bash)
+
+# Zsh (current shell)
+source <(kairos completion zsh)
 ```
 
 ## Testing
@@ -71,24 +94,38 @@ go test -tags=integration ./internal/store/... -run TestInsert_RoundTripsAllFiel
 
 ## Configuration
 
-Every option can be set via a command-line flag or an environment variable. **Flags take priority over environment variables.**
+Every option can be set via a command-line flag, an environment variable, or a YAML config file. Precedence is **flag > env > config file > built-in default**.
 
-| Flag                   | Environment variable      | Default                                                          | Description                                                    |
-|------------------------|---------------------------|------------------------------------------------------------------|----------------------------------------------------------------|
-| `--listen-addr`        | `KAIROS_LISTEN_ADDR`      | `:8080`                                                          | HTTP listen address                                            |
-| `--database-url`       | `KAIROS_DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                                                   |
-| `--amqp-url`           | `KAIROS_AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string                                     |
-| `--queue-name`         | `KAIROS_QUEUE_NAME`       | `kairos.triggers`                                                | Queue to publish trigger messages                              |
-| `--poll-interval-ms`   | `KAIROS_POLL_INTERVAL_MS` | `5000`                                                           | How often the engine polls (ms)                                |
-| `--api-key`            | `KAIROS_API_KEY`          | *(unset — auth disabled)*                                        | Bearer token required on all requests (except `GET /healthz`) |
+| Flag                   | Short | Environment variable      | Config key         | Default                                                          | Description                                                    |
+|------------------------|-------|---------------------------|--------------------|------------------------------------------------------------------|----------------------------------------------------------------|
+| `--listen-addr`        | `-l`  | `KAIROS_LISTEN_ADDR`      | `listen-addr`      | `:8080`                                                          | HTTP listen address                                            |
+| `--database-url`       | `-d`  | `KAIROS_DATABASE_URL`     | `database-url`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                                                   |
+| `--amqp-url`           | `-a`  | `KAIROS_AMQP_URL`         | `amqp-url`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string                                     |
+| `--queue-name`         | `-q`  | `KAIROS_QUEUE_NAME`       | `queue-name`       | `kairos.triggers`                                                | Queue to publish trigger messages                              |
+| `--poll-interval-ms`   | `-p`  | `KAIROS_POLL_INTERVAL_MS` | `poll-interval-ms` | `5000`                                                           | How often the engine polls (ms)                                |
+| `--api-key`            | `-k`  | `KAIROS_API_KEY`          | `api-key`          | *(unset — auth disabled)*                                        | Bearer token required on all requests (except `GET /healthz`) |
 
-Example using flags:
+### Using flags
 
 ```bash
-go run ./cmd/kairos \
+go run ./cmd/kairos run \
   --listen-addr=:9090 \
   --database-url=postgres://user:pass@db:5432/kairos?sslmode=disable \
   --api-key=mysecretkey
+```
+
+### Using a YAML config file
+
+By default kairos looks for `./kairos.yaml` or `$HOME/.kairos.yaml`. Pass `--config /path/to/file.yaml` to point at a specific file.
+
+```yaml
+# kairos.yaml
+listen-addr: ":9090"
+database-url: "postgres://user:pass@db:5432/kairos?sslmode=disable"
+amqp-url: "amqp://guest:guest@rabbit:5672/"
+queue-name: "kairos.triggers"
+poll-interval-ms: 5000
+api-key: "mysecretkey"
 ```
 
 ## Authentication
@@ -281,11 +318,13 @@ kairos/
 │   ├── kairos/         # main entrypoint
 │   └── consumer/       # sample RabbitMQ consumer
 ├── internal/
-│   ├── api/            # HTTP handlers (chi)
-│   ├── config/         # env-based config
+│   ├── api/            # HTTP handlers
+│   ├── cli/            # cobra command tree (root, run, version)
+│   ├── config/         # config struct + viper materialiser
 │   ├── engine/         # trigger polling loop
 │   ├── queue/          # AMQP publisher
-│   └── store/          # Postgres data layer
+│   ├── store/          # Postgres data layer
+│   └── version/        # build-version variable (ldflags-injected)
 ├── docker-compose.yml
 └── Dockerfile
 ```

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/yourorg/kairos/internal/config"
 )
 
 type TriggerMessage struct {
@@ -102,8 +101,16 @@ func realOpenConn(url string) (amqpChannel, func(), error) {
 	}, nil
 }
 
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func main() {
-	cfg := config.Load()
+	amqpURL := getEnv("KAIROS_AMQP_URL", "amqp://guest:guest@localhost:5672/")
+	queueName := getEnv("KAIROS_QUEUE_NAME", "kairos.triggers")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -113,7 +120,7 @@ func main() {
 		close(stop)
 	}()
 
-	if err := run(cfg.AMQPURL, cfg.QueueName, realOpenConn, stop, os.Stdout); err != nil {
+	if err := run(amqpURL, queueName, realOpenConn, stop, os.Stdout); err != nil {
 		slog.Error("consumer error", "err", err)
 		os.Exit(1)
 	}

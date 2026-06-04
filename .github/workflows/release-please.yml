@@ -50,10 +50,11 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
+          VERSION: ${{ needs.release-please.outputs.tag_name }}
         run: |
           EXT=""
           [ "$GOOS" = "windows" ] && EXT=".exe"
-          go build -trimpath -ldflags="-s -w" -o "kairos-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/kairos
+          go build -trimpath -ldflags="-s -w -X github.com/yourorg/kairos/internal/version.Version=${VERSION}" -o "kairos-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/kairos
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}

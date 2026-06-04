@@ -25,11 +25,11 @@ services:
       - postgres
       - rabbitmq
     environment:
-      LISTEN_ADDR: ":8080"
-      DATABASE_URL: "postgres://kairos:kairos@postgres:5432/kairos?sslmode=disable"
-      AMQP_URL: "amqp://guest:guest@rabbitmq:5672/"
-      QUEUE_NAME: "kairos.triggers"
-      POLL_INTERVAL_MS: "5000"
+      KAIROS_LISTEN_ADDR: ":8080"
+      KAIROS_DATABASE_URL: "postgres://kairos:kairos@postgres:5432/kairos?sslmode=disable"
+      KAIROS_AMQP_URL: "amqp://guest:guest@rabbitmq:5672/"
+      KAIROS_QUEUE_NAME: "kairos.triggers"
+      KAIROS_POLL_INTERVAL_MS: "5000"
     ports:
       - "8080:8080"
 
