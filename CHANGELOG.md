@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.0](https://github.com/fguimond/kairos/compare/v0.1.0...v0.2.0) (2026-06-04)
+
+
+### Features
+
+* add API key authentication middleware ([#27](https://github.com/fguimond/kairos/issues/27)) ([6a481e0](https://github.com/fguimond/kairos/commit/6a481e02cde0fb1cad2a372a0c7d38a6364a0225))
+* add CLI flags as alternative to environment variables ([#32](https://github.com/fguimond/kairos/issues/32)) ([42c32a6](https://github.com/fguimond/kairos/commit/42c32a686e1a9b082669ce3a24af793c7fd9e7eb))
+* prefix all environment variables with KAIROS_ ([#30](https://github.com/fguimond/kairos/issues/30)) ([007065e](https://github.com/fguimond/kairos/commit/007065e1d3b344217d2c5d779c607b9293391db7))
+* restructure CLI with cobra/viper subcommands ([#34](https://github.com/fguimond/kairos/issues/34)) ([2723346](https://github.com/fguimond/kairos/commit/2723346cd7a43738ce043b39236aefd5830b965c))
+
 ## [0.1.0](https://github.com/fguimond/kairos/compare/v0.0.0...v0.1.0) (2026-06-03)
 
 
