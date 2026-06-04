@@ -69,16 +69,27 @@ To run a specific test by name:
 go test -tags=integration ./internal/store/... -run TestInsert_RoundTripsAllFields
 ```
 
-## Environment variables
+## Configuration
 
-| Variable                  | Default                                                          | Description                                         |
-|---------------------------|------------------------------------------------------------------|-----------------------------------------------------|
-| `KAIROS_LISTEN_ADDR`      | `:8080`                                                          | HTTP listen address                                 |
-| `KAIROS_DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                                        |
-| `KAIROS_AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string                          |
-| `KAIROS_QUEUE_NAME`       | `kairos.triggers`                                                | Queue to publish trigger messages                   |
-| `KAIROS_POLL_INTERVAL_MS` | `5000`                                                           | How often the engine polls (ms)                     |
-| `KAIROS_API_KEY`          | *(unset — auth disabled)*                                        | Bearer token required on all requests (except `/healthz`) |
+Every option can be set via a command-line flag or an environment variable. **Flags take priority over environment variables.**
+
+| Flag                   | Environment variable      | Default                                                          | Description                                                    |
+|------------------------|---------------------------|------------------------------------------------------------------|----------------------------------------------------------------|
+| `--listen-addr`        | `KAIROS_LISTEN_ADDR`      | `:8080`                                                          | HTTP listen address                                            |
+| `--database-url`       | `KAIROS_DATABASE_URL`     | `postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable` | Postgres DSN                                                   |
+| `--amqp-url`           | `KAIROS_AMQP_URL`         | `amqp://guest:guest@localhost:5672/`                             | RabbitMQ connection string                                     |
+| `--queue-name`         | `KAIROS_QUEUE_NAME`       | `kairos.triggers`                                                | Queue to publish trigger messages                              |
+| `--poll-interval-ms`   | `KAIROS_POLL_INTERVAL_MS` | `5000`                                                           | How often the engine polls (ms)                                |
+| `--api-key`            | `KAIROS_API_KEY`          | *(unset — auth disabled)*                                        | Bearer token required on all requests (except `GET /healthz`) |
+
+Example using flags:
+
+```bash
+go run ./cmd/kairos \
+  --listen-addr=:9090 \
+  --database-url=postgres://user:pass@db:5432/kairos?sslmode=disable \
+  --api-key=mysecretkey
+```
 
 ## Authentication
 
