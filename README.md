@@ -232,7 +232,7 @@ Output per fired job:
   payload:       {"report_type":"daily"}
 ```
 
-The consumer reads `--amqp-url` / `KAIROS_AMQP_URL` and `--queue-name` / `KAIROS_QUEUE_NAME`, using the same defaults as the main service.
+The consumer reads `KAIROS_AMQP_URL` and `KAIROS_QUEUE_NAME` from the environment, using the same defaults as the main service.
 
 ## Queue message format
 
