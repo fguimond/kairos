@@ -11,3 +11,4 @@ WORKDIR /app
 COPY --from=builder /app/kairos .
 EXPOSE 8080
 ENTRYPOINT ["./kairos"]
+CMD ["run"]

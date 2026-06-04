@@ -9,10 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 docker compose up -d postgres rabbitmq
 
 # Run the service
-go run ./cmd/kairos
+go run ./cmd/kairos run
 
 # Build binary
 go build -o kairos ./cmd/kairos
+
+# Print version (use -ldflags "-X github.com/yourorg/kairos/internal/version.Version=<tag>" to inject a release version)
+go run ./cmd/kairos version
 
 # Run all unit tests
 go test ./...
@@ -39,6 +42,9 @@ Kairos is a scheduler micro-service: HTTP clients define schedules, a background
 `engine.Engine` ticks on `POLL_INTERVAL_MS`, calls `store.DueSchedules` with `FOR UPDATE SKIP LOCKED` (safe for multi-replica deploys), then calls `queue.AMQPPublisher.Publish`. On success, `store.AdvanceNextRun` increments `execution_count` and recalculates `next_run_at` (cron via `robfig/cron`, or `+interval_sec`). Schedules are marked `completed` when they are one-shot (no cron, no interval) or when `execution_count` reaches `max_executions`.
 
 **Schema migration** is embedded in `store.Migrate` as a `CREATE TABLE IF NOT EXISTS` string — no migration framework, run on every startup.
+
+**CLI layout (cobra + viper):**
+`cmd/kairos/main.go` only calls `cli.Execute()`. The command tree lives in `internal/cli` (`root.go`, `run.go`, `version.go`); `help` and `completion` come from cobra defaults. Config precedence is **flag > env (`KAIROS_*`) > YAML (`./kairos.yaml`, `$HOME/.kairos.yaml`, or `--config <path>`) > built-in default**, materialised by `config.FromViper`. Flag names are kebab-case (`--listen-addr`) with single-letter shorthands derived from the first letter of the long form (`-l`, `-d`, `-a`, `-q`, `-p`, `-k`).
 
 **Key design notes:**
 - `engine.Publisher` is an interface — swap in a mock for tests without touching `queue`.
