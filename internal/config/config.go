@@ -1,11 +1,13 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,7 +25,7 @@ func Load() Config {
 }
 
 func load(args []string) Config {
-	fs := flag.NewFlagSet("kairos", flag.ExitOnError)
+	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 
 	listenAddr := fs.String("listen-addr", getEnv("KAIROS_LISTEN_ADDR", ":8080"), "address to listen on (KAIROS_LISTEN_ADDR)")
 	databaseURL := fs.String("database-url", getEnv("KAIROS_DATABASE_URL", "postgres://kairos:kairos@localhost:5432/kairos?sslmode=disable"), "postgres connection string (KAIROS_DATABASE_URL)")
@@ -32,9 +34,18 @@ func load(args []string) Config {
 	pollIntervalMs := fs.Int64("poll-interval-ms", getPollIntervalMs(), "engine poll interval in milliseconds (KAIROS_POLL_INTERVAL_MS)")
 	apiKey := fs.String("api-key", getEnv("KAIROS_API_KEY", ""), "API key for authentication (KAIROS_API_KEY)")
 
-	fs.Usage = func() { printUsage(os.Stderr, fs) }
+	fs.Usage = func() {
+		if err := printUsage(os.Stderr, fs); err != nil {
+			os.Exit(2)
+		}
+	}
 
-	fs.Parse(args) //nolint:errcheck // ExitOnError handles errors
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		os.Exit(2)
+	}
 
 	return Config{
 		ListenAddr:   *listenAddr,
@@ -46,8 +57,11 @@ func load(args []string) Config {
 	}
 }
 
-func printUsage(w io.Writer, fs *flag.FlagSet) {
-	fmt.Fprintf(w, "Usage of kairos:\n")
+// printUsage builds the full usage text and writes it in a single call so
+// there is exactly one error to handle.
+func printUsage(w io.Writer, fs *flag.FlagSet) error {
+	var b strings.Builder
+	b.WriteString("Usage of kairos:\n")
 	fs.VisitAll(func(f *flag.Flag) {
 		typeName, usage := flag.UnquoteUsage(f)
 		s := fmt.Sprintf("  --%s", f.Name)
@@ -62,8 +76,12 @@ func printUsage(w io.Writer, fs *flag.FlagSet) {
 				s += fmt.Sprintf(" (default %v)", f.DefValue)
 			}
 		}
-		fmt.Fprintln(w, s)
+		b.WriteString(s + "\n")
 	})
+	if _, err := io.WriteString(w, b.String()); err != nil {
+		return fmt.Errorf("writing usage: %w", err)
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

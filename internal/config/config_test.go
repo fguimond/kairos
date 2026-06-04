@@ -123,15 +123,18 @@ func TestLoad_InvalidPollIntervalEnvFallsBackToDefault(t *testing.T) {
 
 // --- printUsage tests ---
 
-func usageOutput(fs *flag.FlagSet) string {
+func usageOutput(t *testing.T, fs *flag.FlagSet) string {
+	t.Helper()
 	var buf bytes.Buffer
-	printUsage(&buf, fs)
+	if err := printUsage(&buf, fs); err != nil {
+		t.Fatalf("printUsage: %v", err)
+	}
 	return buf.String()
 }
 
 func TestPrintUsage_Header(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.HasPrefix(out, "Usage of kairos:\n") {
 		t.Errorf("output missing header, got:\n%s", out)
 	}
@@ -140,7 +143,7 @@ func TestPrintUsage_Header(t *testing.T) {
 func TestPrintUsage_DoubleDashPrefix(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.String("my-flag", "default", "some usage")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.Contains(out, "  --my-flag") {
 		t.Errorf("expected --my-flag in output, got:\n%s", out)
 	}
@@ -152,7 +155,7 @@ func TestPrintUsage_DoubleDashPrefix(t *testing.T) {
 func TestPrintUsage_StringDefaultQuoted(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.String("addr", ":8080", "listen address")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.Contains(out, `(default ":8080")`) {
 		t.Errorf("string default should be quoted, got:\n%s", out)
 	}
@@ -161,7 +164,7 @@ func TestPrintUsage_StringDefaultQuoted(t *testing.T) {
 func TestPrintUsage_IntDefaultUnquoted(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.Int64("poll-ms", 5000, "poll interval")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.Contains(out, "(default 5000)") {
 		t.Errorf("int default should be unquoted, got:\n%s", out)
 	}
@@ -173,7 +176,7 @@ func TestPrintUsage_IntDefaultUnquoted(t *testing.T) {
 func TestPrintUsage_EmptyStringDefaultOmitted(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.String("api-key", "", "api key")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if strings.Contains(out, "(default") {
 		t.Errorf("empty default should be omitted, got:\n%s", out)
 	}
@@ -185,7 +188,7 @@ func TestPrintUsage_ZeroIntDefaultShown(t *testing.T) {
 	// None of our real flags default to 0, so this is acceptable.
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.Int64("count", 0, "some count")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.Contains(out, "(default 0)") {
 		t.Errorf("expected (default 0) for zero int, got:\n%s", out)
 	}
@@ -194,7 +197,7 @@ func TestPrintUsage_ZeroIntDefaultShown(t *testing.T) {
 func TestPrintUsage_UsageTextIncluded(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.String("queue-name", "kairos.triggers", "AMQP queue name (KAIROS_QUEUE_NAME)")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.Contains(out, "AMQP queue name (KAIROS_QUEUE_NAME)") {
 		t.Errorf("usage text missing from output:\n%s", out)
 	}
@@ -205,7 +208,7 @@ func TestPrintUsage_MultipleFlagsAllPrefixed(t *testing.T) {
 	fs.String("alpha", "a", "first")
 	fs.String("beta", "b", "second")
 	fs.Int64("gamma", 3, "third")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	for _, name := range []string{"alpha", "beta", "gamma"} {
 		if !strings.Contains(out, "  --"+name) {
 			t.Errorf("flag %q missing --prefix in output:\n%s", name, out)
@@ -217,7 +220,7 @@ func TestPrintUsage_TypeNamesPresent(t *testing.T) {
 	fs := flag.NewFlagSet("kairos", flag.ContinueOnError)
 	fs.String("name", "", "a string flag")
 	fs.Int64("count", 0, "an int flag")
-	out := usageOutput(fs)
+	out := usageOutput(t, fs)
 	if !strings.Contains(out, "--name string") {
 		t.Errorf("expected 'string' type name, got:\n%s", out)
 	}
