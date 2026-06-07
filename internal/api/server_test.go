@@ -14,14 +14,16 @@ import (
 
 // mockService implements scheduleService for testing.
 type mockService struct {
-	list   func(ctx context.Context) ([]*store.Schedule, error)
+	list   func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error)
 	create func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
 	get    func(ctx context.Context, id string) (*store.Schedule, error)
 	update func(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error)
 	del    func(ctx context.Context, id string) error
 }
 
-func (m *mockService) List(ctx context.Context) ([]*store.Schedule, error) { return m.list(ctx) }
+func (m *mockService) List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+	return m.list(ctx, f)
+}
 func (m *mockService) Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
 	return m.create(ctx, in)
 }
@@ -61,7 +63,9 @@ func TestHandleHealthz(t *testing.T) {
 func TestHandleList_Happy(t *testing.T) {
 	schedules := []*store.Schedule{{ID: "1", Name: "nightly"}}
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context) ([]*store.Schedule, error) { return schedules, nil },
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			return schedules, nil
+		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
 	w := httptest.NewRecorder()
@@ -80,7 +84,9 @@ func TestHandleList_Happy(t *testing.T) {
 
 func TestHandleList_EmptyList(t *testing.T) {
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context) ([]*store.Schedule, error) { return nil, nil },
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			return nil, nil
+		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
 	w := httptest.NewRecorder()
@@ -92,7 +98,7 @@ func TestHandleList_EmptyList(t *testing.T) {
 
 func TestHandleList_StoreError(t *testing.T) {
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
 			return nil, errors.New("db error")
 		},
 	})
@@ -101,6 +107,134 @@ func TestHandleList_StoreError(t *testing.T) {
 	srv.handleList(w, r)
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestHandleList_FilterByName(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			gotFilter = f
+			return nil, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?name=nightly*", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if gotFilter.Name == nil || *gotFilter.Name != "nightly*" {
+		t.Errorf("expected Name=nightly*, got %v", gotFilter.Name)
+	}
+}
+
+func TestHandleList_FilterByStatus(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			gotFilter = f
+			return nil, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?status=active&status=paused", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if len(gotFilter.Statuses) != 2 {
+		t.Fatalf("expected 2 statuses, got %d", len(gotFilter.Statuses))
+	}
+	if gotFilter.Statuses[0] != store.StatusActive || gotFilter.Statuses[1] != store.StatusPaused {
+		t.Errorf("unexpected statuses: %v", gotFilter.Statuses)
+	}
+}
+
+func TestHandleList_FilterByExecutionCount(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			gotFilter = f
+			return nil, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?execution_count=gt:5&execution_count=lt:10", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if len(gotFilter.ExecutionCount) != 2 {
+		t.Fatalf("expected 2 conditions, got %d", len(gotFilter.ExecutionCount))
+	}
+	if gotFilter.ExecutionCount[0].Op != ">" || gotFilter.ExecutionCount[0].Value != int64(5) {
+		t.Errorf("unexpected first condition: %+v", gotFilter.ExecutionCount[0])
+	}
+	if gotFilter.ExecutionCount[1].Op != "<" || gotFilter.ExecutionCount[1].Value != int64(10) {
+		t.Errorf("unexpected second condition: %+v", gotFilter.ExecutionCount[1])
+	}
+}
+
+func TestHandleList_FilterByNextRunAt(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			gotFilter = f
+			return nil, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?next_run_at=gte:2024-01-01T00:00:00Z", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if len(gotFilter.NextRunAt) != 1 {
+		t.Fatalf("expected 1 condition, got %d", len(gotFilter.NextRunAt))
+	}
+	if gotFilter.NextRunAt[0].Op != ">=" {
+		t.Errorf("unexpected op: %q", gotFilter.NextRunAt[0].Op)
+	}
+}
+
+func TestHandleList_InvalidOperator(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?execution_count=badop:5", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleList_InvalidTimestamp(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?created_at=gt:not-a-time", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleList_InvalidMaxExecutions(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?max_executions=abc", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleList_MissingOpSeparator(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?execution_count=10", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
 
