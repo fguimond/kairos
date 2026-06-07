@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 )
 
 type scheduleService interface {
-	List(ctx context.Context) ([]*store.Schedule, error)
+	List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error)
 	Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
 	Get(ctx context.Context, id string) (*store.Schedule, error)
 	Update(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error)
@@ -77,7 +78,12 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
-	schedules, err := s.svc.List(r.Context())
+	f, err := parseListFilter(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	schedules, err := s.svc.List(r.Context(), f)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -227,4 +233,99 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+// --- filter parsing ---
+
+func parseListFilter(r *http.Request) (store.ListFilter, error) {
+	q := r.URL.Query()
+	var f store.ListFilter
+
+	if name := q.Get("name"); name != "" {
+		f.Name = &name
+	}
+
+	for _, s := range q["status"] {
+		f.Statuses = append(f.Statuses, store.Status(s))
+	}
+
+	if raw := q.Get("max_executions"); raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return f, fmt.Errorf("invalid max_executions: %w", err)
+		}
+		f.MaxExecutions = &v
+	}
+
+	var err error
+	if f.ExecutionCount, err = parseConditions(q["execution_count"], parseIntVal); err != nil {
+		return f, fmt.Errorf("invalid execution_count: %w", err)
+	}
+	if f.CreatedAt, err = parseConditions(q["created_at"], parseTimeVal); err != nil {
+		return f, fmt.Errorf("invalid created_at: %w", err)
+	}
+	if f.UpdatedAt, err = parseConditions(q["updated_at"], parseTimeVal); err != nil {
+		return f, fmt.Errorf("invalid updated_at: %w", err)
+	}
+	if f.NextRunAt, err = parseConditions(q["next_run_at"], parseTimeVal); err != nil {
+		return f, fmt.Errorf("invalid next_run_at: %w", err)
+	}
+
+	return f, nil
+}
+
+func parseConditions(vals []string, parseVal func(string) (any, error)) ([]store.Condition, error) {
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	out := make([]store.Condition, 0, len(vals))
+	for _, v := range vals {
+		opStr, raw, ok := strings.Cut(v, ":")
+		if !ok {
+			return nil, fmt.Errorf("expected op:value format, got %q", v)
+		}
+		sqlOp, err := parseOp(opStr)
+		if err != nil {
+			return nil, err
+		}
+		val, err := parseVal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value %q: %w", raw, err)
+		}
+		out = append(out, store.Condition{Op: sqlOp, Value: val})
+	}
+	return out, nil
+}
+
+func parseOp(op string) (string, error) {
+	switch op {
+	case "eq":
+		return "=", nil
+	case "lt":
+		return "<", nil
+	case "lte":
+		return "<=", nil
+	case "gt":
+		return ">", nil
+	case "gte":
+		return ">=", nil
+	default:
+		return "", fmt.Errorf("unknown operator %q, expected one of: eq, lt, lte, gt, gte", op)
+	}
+}
+
+func parseIntVal(s string) (any, error) {
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func parseTimeVal(s string) (any, error) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
 }

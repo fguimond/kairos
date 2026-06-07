@@ -14,6 +14,23 @@ const (
 	StatusDeleted   Status = "deleted"
 )
 
+// Condition represents a comparison against a numeric or timestamp column.
+type Condition struct {
+	Op    string // one of: "=", "<", "<=", ">", ">="
+	Value any    // int64 for numeric fields; time.Time for timestamp fields
+}
+
+// ListFilter specifies optional constraints for the List query.
+type ListFilter struct {
+	Name           *string
+	Statuses       []Status
+	MaxExecutions  *int64
+	ExecutionCount []Condition
+	CreatedAt      []Condition
+	UpdatedAt      []Condition
+	NextRunAt      []Condition
+}
+
 // Schedule represents a single recurring or one-shot job definition.
 type Schedule struct {
 	ID             string          `json:"id"`

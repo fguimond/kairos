@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -135,10 +136,66 @@ func (s *ScheduleStore) Get(ctx context.Context, id string) (*Schedule, error) {
 	return scanSchedule(row)
 }
 
-func (s *ScheduleStore) List(ctx context.Context) ([]*Schedule, error) {
-	rows, err := s.conn(ctx).Query(ctx,
-		`SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at
-         FROM schedules WHERE status != 'deleted' ORDER BY next_run_at ASC`)
+func (s *ScheduleStore) List(ctx context.Context, f ListFilter) ([]*Schedule, error) {
+	var (
+		clauses []string
+		args    []any
+		n       = 1
+	)
+
+	if len(f.Statuses) == 0 {
+		clauses = append(clauses, "status != 'deleted'")
+	} else {
+		clauses = append(clauses, fmt.Sprintf("status = ANY($%d)", n))
+		args = append(args, f.Statuses)
+		n++
+	}
+
+	if f.Name != nil {
+		if strings.Contains(*f.Name, "*") {
+			clauses = append(clauses, fmt.Sprintf("name ILIKE $%d", n))
+			args = append(args, strings.ReplaceAll(*f.Name, "*", "%"))
+		} else {
+			clauses = append(clauses, fmt.Sprintf("name = $%d", n))
+			args = append(args, *f.Name)
+		}
+		n++
+	}
+
+	if f.MaxExecutions != nil {
+		clauses = append(clauses, fmt.Sprintf("max_executions = $%d", n))
+		args = append(args, *f.MaxExecutions)
+		n++
+	}
+
+	for _, c := range f.ExecutionCount {
+		clauses = append(clauses, fmt.Sprintf("execution_count %s $%d", c.Op, n))
+		args = append(args, c.Value)
+		n++
+	}
+
+	for _, c := range f.CreatedAt {
+		clauses = append(clauses, fmt.Sprintf("created_at %s $%d", c.Op, n))
+		args = append(args, c.Value)
+		n++
+	}
+
+	for _, c := range f.UpdatedAt {
+		clauses = append(clauses, fmt.Sprintf("updated_at %s $%d", c.Op, n))
+		args = append(args, c.Value)
+		n++
+	}
+
+	for _, c := range f.NextRunAt {
+		clauses = append(clauses, fmt.Sprintf("next_run_at %s $%d", c.Op, n))
+		args = append(args, c.Value)
+		n++
+	}
+
+	q := `SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at` +
+		` FROM schedules WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY next_run_at ASC`
+
+	rows, err := s.conn(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list schedules: %w", err)
 	}

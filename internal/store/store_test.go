@@ -401,7 +401,7 @@ func TestList_Empty(t *testing.T) {
 	clear(t)
 	s := newStore()
 
-	got, err := s.List(context.Background())
+	got, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestList_ExcludesDeletedOnly(t *testing.T) {
 		insert(t, s, sch)
 	}
 
-	got, err := s.List(context.Background())
+	got, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestList_OrderedByNextRunAtAsc(t *testing.T) {
 		insert(t, s, sch)
 	}
 
-	got, err := s.List(context.Background())
+	got, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -465,6 +465,170 @@ func TestList_OrderedByNextRunAtAsc(t *testing.T) {
 			t.Errorf("List is not ordered by next_run_at: index %d (%v) is before index %d (%v)",
 				i, got[i].NextRunAt, i-1, got[i-1].NextRunAt)
 		}
+	}
+}
+
+// --- List (filters) ---
+
+func TestList_FilterByNameExact(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	insert(t, s, makeSchedule("a", "nightly-backup", future()))
+	insert(t, s, makeSchedule("b", "daily-report", future()))
+
+	name := "nightly-backup"
+	got, err := s.List(context.Background(), ListFilter{Name: &name})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "a" {
+		t.Errorf("expected only 'a', got %v", ids(got))
+	}
+}
+
+func TestList_FilterByNameWildcard(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	insert(t, s, makeSchedule("a", "nightly-backup", future()))
+	insert(t, s, makeSchedule("b", "nightly-report", future()))
+	insert(t, s, makeSchedule("c", "daily-sync", future()))
+
+	name := "nightly*"
+	got, err := s.List(context.Background(), ListFilter{Name: &name})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 results for nightly*, got %d: %v", len(got), ids(got))
+	}
+}
+
+func TestList_FilterByStatus(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	active := makeSchedule("a", "active", future())
+	paused := makeSchedule("b", "paused", future())
+	paused.Status = StatusPaused
+	completed := makeSchedule("c", "completed", future())
+	completed.Status = StatusCompleted
+
+	for _, sch := range []*Schedule{active, paused, completed} {
+		insert(t, s, sch)
+	}
+
+	got, err := s.List(context.Background(), ListFilter{Statuses: []Status{StatusActive, StatusPaused}})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 results, got %d: %v", len(got), ids(got))
+	}
+	for _, g := range got {
+		if g.Status != StatusActive && g.Status != StatusPaused {
+			t.Errorf("unexpected status %q in result", g.Status)
+		}
+	}
+}
+
+func TestList_FilterByStatusIncludesDeleted(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	del := makeSchedule("d", "deleted", future())
+	del.Status = StatusDeleted
+	insert(t, s, del)
+
+	got, err := s.List(context.Background(), ListFilter{Statuses: []Status{StatusDeleted}})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "d" {
+		t.Errorf("expected deleted row when status filter includes deleted, got %v", ids(got))
+	}
+}
+
+func TestList_FilterByExecutionCount(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	low := makeSchedule("low", "low", future())
+	mid := makeSchedule("mid", "mid", future())
+	high := makeSchedule("high", "high", future())
+
+	for _, sch := range []*Schedule{low, mid, high} {
+		insert(t, s, sch)
+	}
+	// advance counts: low=1, mid=5, high=10
+	s.SetNextRun(context.Background(), "low", future(), 1)
+	s.SetNextRun(context.Background(), "mid", future(), 5)
+	s.SetNextRun(context.Background(), "high", future(), 10)
+
+	got, err := s.List(context.Background(), ListFilter{
+		ExecutionCount: []Condition{
+			{Op: ">", Value: int64(1)},
+			{Op: "<", Value: int64(10)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "mid" {
+		t.Errorf("expected only 'mid', got %v", ids(got))
+	}
+}
+
+func TestList_FilterByNextRunAt(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	base := time.Now().UTC()
+	near := makeSchedule("near", "near", base.Add(time.Hour).Truncate(time.Microsecond))
+	far := makeSchedule("far", "far", base.Add(48*time.Hour).Truncate(time.Microsecond))
+
+	for _, sch := range []*Schedule{near, far} {
+		insert(t, s, sch)
+	}
+
+	cutoff := base.Add(24 * time.Hour)
+	got, err := s.List(context.Background(), ListFilter{
+		NextRunAt: []Condition{{Op: "<", Value: cutoff}},
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "near" {
+		t.Errorf("expected only 'near', got %v", ids(got))
+	}
+}
+
+func TestList_FilterByMaxExecutions(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	maxEx := int64(5)
+	capped := makeSchedule("capped", "capped", future())
+	capped.MaxExecutions = &maxEx
+	unlimited := makeSchedule("unlimited", "unlimited", future())
+
+	insert(t, s, capped)
+	insert(t, s, unlimited)
+
+	got, err := s.List(context.Background(), ListFilter{MaxExecutions: &maxEx})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "capped" {
+		t.Errorf("expected only 'capped', got %v", ids(got))
 	}
 }
 

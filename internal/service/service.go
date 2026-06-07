@@ -15,7 +15,7 @@ type Store interface {
 	BeginTx(ctx context.Context) (context.Context, func() error, func() error, error)
 	Insert(ctx context.Context, sch *store.Schedule) error
 	Get(ctx context.Context, id string) (*store.Schedule, error)
-	List(ctx context.Context) ([]*store.Schedule, error)
+	List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error)
 	Save(ctx context.Context, sch *store.Schedule) error
 	Delete(ctx context.Context, id string) error
 	DueSchedules(ctx context.Context, limit int) ([]*store.Schedule, error)
@@ -109,8 +109,8 @@ func (s *ScheduleService) Get(ctx context.Context, id string) (*store.Schedule, 
 	return s.store.Get(ctx, id)
 }
 
-func (s *ScheduleService) List(ctx context.Context) ([]*store.Schedule, error) {
-	return s.store.List(ctx)
+func (s *ScheduleService) List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+	return s.store.List(ctx, f)
 }
 
 func (s *ScheduleService) Update(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error) {
