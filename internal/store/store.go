@@ -192,8 +192,9 @@ func (s *ScheduleStore) List(ctx context.Context, f ListFilter) ([]*Schedule, er
 		n++
 	}
 
+	orderBy := buildOrderBy(f.Sort)
 	q := `SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at` +
-		` FROM schedules WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY next_run_at ASC`
+		` FROM schedules WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY ` + orderBy
 
 	rows, err := s.conn(ctx).Query(ctx, q, args...)
 	if err != nil {
@@ -286,6 +287,17 @@ func (s *ScheduleStore) SetNextRun(ctx context.Context, id string, next time.Tim
 		return fmt.Errorf("set next run: %w", err)
 	}
 	return nil
+}
+
+func buildOrderBy(sort []SortOrder) string {
+	if len(sort) == 0 {
+		return "updated_at DESC"
+	}
+	parts := make([]string, len(sort))
+	for i, s := range sort {
+		parts[i] = s.Field + " " + s.Dir
+	}
+	return strings.Join(parts, ", ")
 }
 
 // scanSchedule works for both pgx.Row and pgx.Rows.

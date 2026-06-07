@@ -271,6 +271,14 @@ func parseListFilter(r *http.Request) (store.ListFilter, error) {
 		return f, fmt.Errorf("invalid next_run_at: %w", err)
 	}
 
+	if raw := q.Get("sort"); raw != "" {
+		sort, err := parseSortParam(raw)
+		if err != nil {
+			return f, err
+		}
+		f.Sort = sort
+	}
+
 	return f, nil
 }
 
@@ -328,4 +336,33 @@ func parseTimeVal(s string) (any, error) {
 		return nil, fmt.Errorf("%w", err)
 	}
 	return t, nil
+}
+
+var sortableFields = map[string]struct{}{
+	"name": {}, "description": {}, "cron_expr": {}, "interval_sec": {},
+	"timezone": {}, "status": {}, "max_executions": {}, "execution_count": {},
+	"next_run_at": {}, "created_at": {}, "updated_at": {},
+}
+
+func parseSortParam(raw string) ([]store.SortOrder, error) {
+	fields := strings.Split(raw, ",")
+	out := make([]store.SortOrder, 0, len(fields))
+	for _, f := range fields {
+		col, dir, ok := strings.Cut(f, ":")
+		if !ok {
+			return nil, fmt.Errorf("invalid sort field %q: expected field:direction", f)
+		}
+		if _, valid := sortableFields[col]; !valid {
+			return nil, fmt.Errorf("unknown sort field %q", col)
+		}
+		switch strings.ToLower(dir) {
+		case "asc":
+			out = append(out, store.SortOrder{Field: col, Dir: "ASC"})
+		case "desc":
+			out = append(out, store.SortOrder{Field: col, Dir: "DESC"})
+		default:
+			return nil, fmt.Errorf("invalid sort direction %q: expected asc or desc", dir)
+		}
+	}
+	return out, nil
 }

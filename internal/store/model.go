@@ -20,6 +20,12 @@ type Condition struct {
 	Value any    // int64 for numeric fields; time.Time for timestamp fields
 }
 
+// SortOrder specifies a column and direction for ORDER BY.
+type SortOrder struct {
+	Field string // column name (e.g. "name", "updated_at")
+	Dir   string // "ASC" or "DESC"
+}
+
 // ListFilter specifies optional constraints for the List query.
 type ListFilter struct {
 	Name           *string
@@ -29,6 +35,7 @@ type ListFilter struct {
 	CreatedAt      []Condition
 	UpdatedAt      []Condition
 	NextRunAt      []Condition
+	Sort           []SortOrder
 }
 
 // Schedule represents a single recurring or one-shot job definition.
