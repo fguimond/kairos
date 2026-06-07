@@ -317,7 +317,7 @@ func parseOp(op string) (string, error) {
 func parseIntVal(s string) (any, error) {
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w", err)
 	}
 	return v, nil
 }
@@ -325,7 +325,7 @@ func parseIntVal(s string) (any, error) {
 func parseTimeVal(s string) (any, error) {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w", err)
 	}
 	return t, nil
 }
