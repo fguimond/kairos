@@ -238,6 +238,83 @@ func TestHandleList_MissingOpSeparator(t *testing.T) {
 	}
 }
 
+func TestHandleList_SortSingleField(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			gotFilter = f
+			return nil, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=name:asc", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if len(gotFilter.Sort) != 1 {
+		t.Fatalf("expected 1 sort order, got %d", len(gotFilter.Sort))
+	}
+	if gotFilter.Sort[0].Field != "name" || gotFilter.Sort[0].Dir != "ASC" {
+		t.Errorf("unexpected sort: %+v", gotFilter.Sort[0])
+	}
+}
+
+func TestHandleList_SortMultipleFields(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+			gotFilter = f
+			return nil, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=status:asc,name:desc", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if len(gotFilter.Sort) != 2 {
+		t.Fatalf("expected 2 sort orders, got %d", len(gotFilter.Sort))
+	}
+	if gotFilter.Sort[0].Field != "status" || gotFilter.Sort[0].Dir != "ASC" {
+		t.Errorf("unexpected first sort: %+v", gotFilter.Sort[0])
+	}
+	if gotFilter.Sort[1].Field != "name" || gotFilter.Sort[1].Dir != "DESC" {
+		t.Errorf("unexpected second sort: %+v", gotFilter.Sort[1])
+	}
+}
+
+func TestHandleList_SortInvalidField(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=id:asc", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleList_SortInvalidDirection(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=name:up", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleList_SortMissingDirection(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=name", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
 // --- POST /api/v1/schedules ---
 
 func TestHandleCreate_HappyCron(t *testing.T) {
