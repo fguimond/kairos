@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git
+
+Never push directly to the `main` branch. Always create a feature branch and open a pull request.
+
 ## Commands
 
 ```bash
