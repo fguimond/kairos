@@ -14,14 +14,14 @@ import (
 
 // mockService implements scheduleService for testing.
 type mockService struct {
-	list   func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error)
+	list   func(ctx context.Context, f store.ListFilter) (*store.ListResult, error)
 	create func(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
 	get    func(ctx context.Context, id string) (*store.Schedule, error)
 	update func(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error)
 	del    func(ctx context.Context, id string) error
 }
 
-func (m *mockService) List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+func (m *mockService) List(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 	return m.list(ctx, f)
 }
 func (m *mockService) Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error) {
@@ -63,8 +63,8 @@ func TestHandleHealthz(t *testing.T) {
 func TestHandleList_Happy(t *testing.T) {
 	schedules := []*store.Schedule{{ID: "1", Name: "nightly"}}
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
-			return schedules, nil
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
+			return &store.ListResult{Schedules: schedules, Total: 1}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
@@ -73,19 +73,22 @@ func TestHandleList_Happy(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
-	var got []*store.Schedule
+	var got listResponse
 	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "1" {
+	if len(got.Data) != 1 || got.Data[0].ID != "1" {
 		t.Errorf("unexpected body: %s", w.Body.String())
+	}
+	if got.Page != 1 || got.Limit != 50 || got.Total != 1 {
+		t.Errorf("unexpected pagination metadata: page=%d limit=%d total=%d", got.Page, got.Limit, got.Total)
 	}
 }
 
 func TestHandleList_EmptyList(t *testing.T) {
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
-			return nil, nil
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
@@ -98,7 +101,7 @@ func TestHandleList_EmptyList(t *testing.T) {
 
 func TestHandleList_StoreError(t *testing.T) {
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			return nil, errors.New("db error")
 		},
 	})
@@ -113,9 +116,9 @@ func TestHandleList_StoreError(t *testing.T) {
 func TestHandleList_FilterByName(t *testing.T) {
 	var gotFilter store.ListFilter
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			gotFilter = f
-			return nil, nil
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?name=nightly*", nil)
@@ -132,9 +135,9 @@ func TestHandleList_FilterByName(t *testing.T) {
 func TestHandleList_FilterByStatus(t *testing.T) {
 	var gotFilter store.ListFilter
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			gotFilter = f
-			return nil, nil
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?status=active&status=paused", nil)
@@ -154,9 +157,9 @@ func TestHandleList_FilterByStatus(t *testing.T) {
 func TestHandleList_FilterByExecutionCount(t *testing.T) {
 	var gotFilter store.ListFilter
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			gotFilter = f
-			return nil, nil
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?execution_count=gt:5&execution_count=lt:10", nil)
@@ -179,9 +182,9 @@ func TestHandleList_FilterByExecutionCount(t *testing.T) {
 func TestHandleList_FilterByNextRunAt(t *testing.T) {
 	var gotFilter store.ListFilter
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			gotFilter = f
-			return nil, nil
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?next_run_at=gte:2024-01-01T00:00:00Z", nil)
@@ -241,9 +244,9 @@ func TestHandleList_MissingOpSeparator(t *testing.T) {
 func TestHandleList_SortSingleField(t *testing.T) {
 	var gotFilter store.ListFilter
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			gotFilter = f
-			return nil, nil
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=name:asc", nil)
@@ -263,9 +266,9 @@ func TestHandleList_SortSingleField(t *testing.T) {
 func TestHandleList_SortMultipleFields(t *testing.T) {
 	var gotFilter store.ListFilter
 	srv := newTestServer(&mockService{
-		list: func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 			gotFilter = f
-			return nil, nil
+			return &store.ListResult{}, nil
 		},
 	})
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?sort=status:asc,name:desc", nil)
@@ -312,6 +315,82 @@ func TestHandleList_SortMissingDirection(t *testing.T) {
 	srv.handleList(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleList_DefaultPagination(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
+			gotFilter = f
+			return &store.ListResult{}, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if gotFilter.Page != 1 || gotFilter.Limit != 50 {
+		t.Errorf("expected default page=1 limit=50, got page=%d limit=%d", gotFilter.Page, gotFilter.Limit)
+	}
+	var got listResponse
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Page != 1 || got.Limit != 50 {
+		t.Errorf("expected page=1 limit=50 in response, got page=%d limit=%d", got.Page, got.Limit)
+	}
+}
+
+func TestHandleList_ExplicitPageAndLimit(t *testing.T) {
+	var gotFilter store.ListFilter
+	srv := newTestServer(&mockService{
+		list: func(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
+			gotFilter = f
+			return &store.ListResult{Total: 100}, nil
+		},
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?page=3&limit=10", nil)
+	w := httptest.NewRecorder()
+	srv.handleList(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if gotFilter.Page != 3 || gotFilter.Limit != 10 {
+		t.Errorf("expected page=3 limit=10, got page=%d limit=%d", gotFilter.Page, gotFilter.Limit)
+	}
+	var got listResponse
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Page != 3 || got.Limit != 10 || got.Total != 100 {
+		t.Errorf("unexpected response: page=%d limit=%d total=%d", got.Page, got.Limit, got.Total)
+	}
+}
+
+func TestHandleList_InvalidPage(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	for _, q := range []string{"page=0", "page=-1", "page=abc"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?"+q, nil)
+		w := httptest.NewRecorder()
+		srv.handleList(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", q, w.Code)
+		}
+	}
+}
+
+func TestHandleList_InvalidLimit(t *testing.T) {
+	srv := newTestServer(&mockService{})
+	for _, q := range []string{"limit=0", "limit=-1", "limit=abc", "limit=201"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/schedules?"+q, nil)
+		w := httptest.NewRecorder()
+		srv.handleList(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", q, w.Code)
+		}
 	}
 }
 

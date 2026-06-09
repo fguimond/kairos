@@ -16,7 +16,7 @@ type mockStore struct {
 	beginTxFn      func(ctx context.Context) (context.Context, func() error, func() error, error)
 	insertFn       func(ctx context.Context, sch *store.Schedule) error
 	getFn          func(ctx context.Context, id string) (*store.Schedule, error)
-	listFn         func(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error)
+	listFn         func(ctx context.Context, f store.ListFilter) (*store.ListResult, error)
 	saveFn         func(ctx context.Context, sch *store.Schedule) error
 	deleteFn       func(ctx context.Context, id string) error
 	dueSchedulesFn func(ctx context.Context, limit int) ([]*store.Schedule, error)
@@ -38,7 +38,7 @@ func (m *mockStore) Insert(ctx context.Context, sch *store.Schedule) error {
 func (m *mockStore) Get(ctx context.Context, id string) (*store.Schedule, error) {
 	return m.getFn(ctx, id)
 }
-func (m *mockStore) List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error) {
+func (m *mockStore) List(ctx context.Context, f store.ListFilter) (*store.ListResult, error) {
 	return m.listFn(ctx, f)
 }
 func (m *mockStore) Save(ctx context.Context, sch *store.Schedule) error {
@@ -452,37 +452,37 @@ func TestGet_StoreError(t *testing.T) {
 func TestList_HappyPath(t *testing.T) {
 	expected := []*store.Schedule{{ID: "1"}, {ID: "2"}}
 	svc := newSvc(&mockStore{
-		listFn: func(_ context.Context, _ store.ListFilter) ([]*store.Schedule, error) {
-			return expected, nil
+		listFn: func(_ context.Context, _ store.ListFilter) (*store.ListResult, error) {
+			return &store.ListResult{Schedules: expected, Total: 2}, nil
 		},
 	})
 	got, err := svc.List(context.Background(), store.ListFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 2 {
-		t.Errorf("expected 2 schedules, got %d", len(got))
+	if len(got.Schedules) != 2 {
+		t.Errorf("expected 2 schedules, got %d", len(got.Schedules))
 	}
 }
 
 func TestList_Empty(t *testing.T) {
 	svc := newSvc(&mockStore{
-		listFn: func(_ context.Context, _ store.ListFilter) ([]*store.Schedule, error) {
-			return nil, nil
+		listFn: func(_ context.Context, _ store.ListFilter) (*store.ListResult, error) {
+			return &store.ListResult{}, nil
 		},
 	})
 	got, err := svc.List(context.Background(), store.ListFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 0 {
-		t.Errorf("expected empty list, got %d items", len(got))
+	if len(got.Schedules) != 0 {
+		t.Errorf("expected empty list, got %d items", len(got.Schedules))
 	}
 }
 
 func TestList_StoreError(t *testing.T) {
 	svc := newSvc(&mockStore{
-		listFn: func(_ context.Context, _ store.ListFilter) ([]*store.Schedule, error) {
+		listFn: func(_ context.Context, _ store.ListFilter) (*store.ListResult, error) {
 			return nil, errors.New("db error")
 		},
 	})

@@ -17,11 +17,18 @@ import (
 )
 
 type scheduleService interface {
-	List(ctx context.Context, f store.ListFilter) ([]*store.Schedule, error)
+	List(ctx context.Context, f store.ListFilter) (*store.ListResult, error)
 	Create(ctx context.Context, in store.CreateScheduleInput) (*store.Schedule, error)
 	Get(ctx context.Context, id string) (*store.Schedule, error)
 	Update(ctx context.Context, id string, in store.UpdateScheduleInput) (*store.Schedule, error)
 	Delete(ctx context.Context, id string) error
+}
+
+type listResponse struct {
+	Data  []*store.Schedule `json:"data"`
+	Page  int               `json:"page"`
+	Limit int               `json:"limit"`
+	Total int64             `json:"total"`
 }
 
 type Server struct {
@@ -83,12 +90,21 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	schedules, err := s.svc.List(r.Context(), f)
+	result, err := s.svc.List(r.Context(), f)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, schedules)
+	data := result.Schedules
+	if data == nil {
+		data = []*store.Schedule{}
+	}
+	writeJSON(w, http.StatusOK, listResponse{
+		Data:  data,
+		Page:  f.Page,
+		Limit: f.Limit,
+		Total: result.Total,
+	})
 }
 
 func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -277,6 +293,27 @@ func parseListFilter(r *http.Request) (store.ListFilter, error) {
 			return f, err
 		}
 		f.Sort = sort
+	}
+
+	f.Page = 1
+	if raw := q.Get("page"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			return f, fmt.Errorf("invalid page: must be an integer >= 1")
+		}
+		f.Page = v
+	}
+
+	f.Limit = 50
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			return f, fmt.Errorf("invalid limit: must be an integer >= 1")
+		}
+		if v > 200 {
+			return f, fmt.Errorf("invalid limit: must be <= 200")
+		}
+		f.Limit = v
 	}
 
 	return f, nil

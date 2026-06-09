@@ -136,7 +136,7 @@ func (s *ScheduleStore) Get(ctx context.Context, id string) (*Schedule, error) {
 	return scanSchedule(row)
 }
 
-func (s *ScheduleStore) List(ctx context.Context, f ListFilter) ([]*Schedule, error) {
+func (s *ScheduleStore) List(ctx context.Context, f ListFilter) (*ListResult, error) {
 	var (
 		clauses []string
 		args    []any
@@ -193,8 +193,13 @@ func (s *ScheduleStore) List(ctx context.Context, f ListFilter) ([]*Schedule, er
 	}
 
 	orderBy := buildOrderBy(f.Sort)
-	q := `SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at` +
+	q := `SELECT id,name,description,cron_expr,interval_sec,timezone,payload,status,max_executions,execution_count,next_run_at,created_at,updated_at, COUNT(*) OVER () AS total` +
 		` FROM schedules WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY ` + orderBy
+
+	if f.Limit > 0 {
+		q += fmt.Sprintf(" LIMIT $%d OFFSET $%d", n, n+1)
+		args = append(args, f.Limit, (f.Page-1)*f.Limit)
+	}
 
 	rows, err := s.conn(ctx).Query(ctx, q, args...)
 	if err != nil {
@@ -202,18 +207,27 @@ func (s *ScheduleStore) List(ctx context.Context, f ListFilter) ([]*Schedule, er
 	}
 	defer rows.Close()
 
-	var out []*Schedule
+	var (
+		out   []*Schedule
+		total int64
+	)
 	for rows.Next() {
-		sch, err := scanSchedule(rows)
-		if err != nil {
-			return nil, err
+		var sch Schedule
+		if err := rows.Scan(
+			&sch.ID, &sch.Name, &sch.Description,
+			&sch.CronExpr, &sch.IntervalSec, &sch.Timezone, &sch.Payload,
+			&sch.Status, &sch.MaxExecutions, &sch.ExecutionCount,
+			&sch.NextRunAt, &sch.CreatedAt, &sch.UpdatedAt,
+			&total,
+		); err != nil {
+			return nil, fmt.Errorf("list schedules: %w", err)
 		}
-		out = append(out, sch)
+		out = append(out, &sch)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list schedules: %w", err)
 	}
-	return out, nil
+	return &ListResult{Schedules: out, Total: total}, nil
 }
 
 func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {

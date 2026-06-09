@@ -401,12 +401,15 @@ func TestList_Empty(t *testing.T) {
 	clear(t)
 	s := newStore()
 
-	got, err := s.List(context.Background(), ListFilter{})
+	result, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 0 {
-		t.Errorf("expected empty list, got %d items", len(got))
+	if len(result.Schedules) != 0 {
+		t.Errorf("expected empty list, got %d items", len(result.Schedules))
+	}
+	if result.Total != 0 {
+		t.Errorf("expected total=0, got %d", result.Total)
 	}
 }
 
@@ -428,14 +431,14 @@ func TestList_ExcludesDeletedOnly(t *testing.T) {
 		insert(t, s, sch)
 	}
 
-	got, err := s.List(context.Background(), ListFilter{})
+	result, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 3 {
-		t.Errorf("expected 3 non-deleted schedules, got %d", len(got))
+	if len(result.Schedules) != 3 {
+		t.Errorf("expected 3 non-deleted schedules, got %d", len(result.Schedules))
 	}
-	for _, g := range got {
+	for _, g := range result.Schedules {
 		if g.Status == StatusDeleted {
 			t.Errorf("List returned deleted schedule %q", g.ID)
 		}
@@ -453,10 +456,11 @@ func TestList_OrderedByNextRunAtAsc(t *testing.T) {
 		insert(t, s, sch)
 	}
 
-	got, err := s.List(context.Background(), ListFilter{})
+	result, err := s.List(context.Background(), ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
+	got := result.Schedules
 	if len(got) != 3 {
 		t.Fatalf("expected 3 schedules, got %d", len(got))
 	}
@@ -479,12 +483,12 @@ func TestList_FilterByNameExact(t *testing.T) {
 	insert(t, s, makeSchedule("b", "daily-report", future()))
 
 	name := "nightly-backup"
-	got, err := s.List(context.Background(), ListFilter{Name: &name})
+	result, err := s.List(context.Background(), ListFilter{Name: &name})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "a" {
-		t.Errorf("expected only 'a', got %v", ids(got))
+	if len(result.Schedules) != 1 || result.Schedules[0].ID != "a" {
+		t.Errorf("expected only 'a', got %v", ids(result.Schedules))
 	}
 }
 
@@ -498,12 +502,12 @@ func TestList_FilterByNameWildcard(t *testing.T) {
 	insert(t, s, makeSchedule("c", "daily-sync", future()))
 
 	name := "nightly*"
-	got, err := s.List(context.Background(), ListFilter{Name: &name})
+	result, err := s.List(context.Background(), ListFilter{Name: &name})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 2 {
-		t.Errorf("expected 2 results for nightly*, got %d: %v", len(got), ids(got))
+	if len(result.Schedules) != 2 {
+		t.Errorf("expected 2 results for nightly*, got %d: %v", len(result.Schedules), ids(result.Schedules))
 	}
 }
 
@@ -522,14 +526,14 @@ func TestList_FilterByStatus(t *testing.T) {
 		insert(t, s, sch)
 	}
 
-	got, err := s.List(context.Background(), ListFilter{Statuses: []Status{StatusActive, StatusPaused}})
+	result, err := s.List(context.Background(), ListFilter{Statuses: []Status{StatusActive, StatusPaused}})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 2 {
-		t.Errorf("expected 2 results, got %d: %v", len(got), ids(got))
+	if len(result.Schedules) != 2 {
+		t.Errorf("expected 2 results, got %d: %v", len(result.Schedules), ids(result.Schedules))
 	}
-	for _, g := range got {
+	for _, g := range result.Schedules {
 		if g.Status != StatusActive && g.Status != StatusPaused {
 			t.Errorf("unexpected status %q in result", g.Status)
 		}
@@ -545,12 +549,12 @@ func TestList_FilterByStatusIncludesDeleted(t *testing.T) {
 	del.Status = StatusDeleted
 	insert(t, s, del)
 
-	got, err := s.List(context.Background(), ListFilter{Statuses: []Status{StatusDeleted}})
+	result, err := s.List(context.Background(), ListFilter{Statuses: []Status{StatusDeleted}})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "d" {
-		t.Errorf("expected deleted row when status filter includes deleted, got %v", ids(got))
+	if len(result.Schedules) != 1 || result.Schedules[0].ID != "d" {
+		t.Errorf("expected deleted row when status filter includes deleted, got %v", ids(result.Schedules))
 	}
 }
 
@@ -571,7 +575,7 @@ func TestList_FilterByExecutionCount(t *testing.T) {
 	s.SetNextRun(context.Background(), "mid", future(), 5)
 	s.SetNextRun(context.Background(), "high", future(), 10)
 
-	got, err := s.List(context.Background(), ListFilter{
+	result, err := s.List(context.Background(), ListFilter{
 		ExecutionCount: []Condition{
 			{Op: ">", Value: int64(1)},
 			{Op: "<", Value: int64(10)},
@@ -580,8 +584,8 @@ func TestList_FilterByExecutionCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "mid" {
-		t.Errorf("expected only 'mid', got %v", ids(got))
+	if len(result.Schedules) != 1 || result.Schedules[0].ID != "mid" {
+		t.Errorf("expected only 'mid', got %v", ids(result.Schedules))
 	}
 }
 
@@ -599,14 +603,14 @@ func TestList_FilterByNextRunAt(t *testing.T) {
 	}
 
 	cutoff := base.Add(24 * time.Hour)
-	got, err := s.List(context.Background(), ListFilter{
+	result, err := s.List(context.Background(), ListFilter{
 		NextRunAt: []Condition{{Op: "<", Value: cutoff}},
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "near" {
-		t.Errorf("expected only 'near', got %v", ids(got))
+	if len(result.Schedules) != 1 || result.Schedules[0].ID != "near" {
+		t.Errorf("expected only 'near', got %v", ids(result.Schedules))
 	}
 }
 
@@ -623,12 +627,55 @@ func TestList_FilterByMaxExecutions(t *testing.T) {
 	insert(t, s, capped)
 	insert(t, s, unlimited)
 
-	got, err := s.List(context.Background(), ListFilter{MaxExecutions: &maxEx})
+	result, err := s.List(context.Background(), ListFilter{MaxExecutions: &maxEx})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != "capped" {
-		t.Errorf("expected only 'capped', got %v", ids(got))
+	if len(result.Schedules) != 1 || result.Schedules[0].ID != "capped" {
+		t.Errorf("expected only 'capped', got %v", ids(result.Schedules))
+	}
+}
+
+func TestList_Pagination(t *testing.T) {
+	checkDB(t)
+	clear(t)
+	s := newStore()
+
+	for i := 1; i <= 5; i++ {
+		insert(t, s, makeSchedule(fmt.Sprintf("p-%d", i), fmt.Sprintf("schedule %d", i), future()))
+	}
+
+	// Page 1 of 2 with limit 3 — should return 3 rows, total=5.
+	result, err := s.List(context.Background(), ListFilter{Page: 1, Limit: 3})
+	if err != nil {
+		t.Fatalf("List page 1: %v", err)
+	}
+	if len(result.Schedules) != 3 {
+		t.Errorf("page 1: expected 3 schedules, got %d", len(result.Schedules))
+	}
+	if result.Total != 5 {
+		t.Errorf("page 1: expected total=5, got %d", result.Total)
+	}
+
+	// Page 2 — should return 2 rows, total=5.
+	result2, err := s.List(context.Background(), ListFilter{Page: 2, Limit: 3})
+	if err != nil {
+		t.Fatalf("List page 2: %v", err)
+	}
+	if len(result2.Schedules) != 2 {
+		t.Errorf("page 2: expected 2 schedules, got %d", len(result2.Schedules))
+	}
+	if result2.Total != 5 {
+		t.Errorf("page 2: expected total=5, got %d", result2.Total)
+	}
+
+	// Page beyond results — should return 0 rows, total=0 (no rows to read count from).
+	result3, err := s.List(context.Background(), ListFilter{Page: 10, Limit: 3})
+	if err != nil {
+		t.Fatalf("List page 10: %v", err)
+	}
+	if len(result3.Schedules) != 0 {
+		t.Errorf("page 10: expected 0 schedules, got %d", len(result3.Schedules))
 	}
 }
 

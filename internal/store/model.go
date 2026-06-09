@@ -36,6 +36,14 @@ type ListFilter struct {
 	UpdatedAt      []Condition
 	NextRunAt      []Condition
 	Sort           []SortOrder
+	Page           int
+	Limit          int
+}
+
+// ListResult is returned by List and includes the matching schedules and total count.
+type ListResult struct {
+	Schedules []*Schedule
+	Total     int64
 }
 
 // Schedule represents a single recurring or one-shot job definition.
