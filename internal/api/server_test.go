@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/yourorg/kairos/internal/store"
+	"github.com/francisguimond/kairos/internal/store"
 )
 
 // mockService implements scheduleService for testing.

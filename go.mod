@@ -1,4 +1,4 @@
-module github.com/yourorg/kairos
+module github.com/francisguimond/kairos
 
 go 1.25.0
 

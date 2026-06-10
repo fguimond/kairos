@@ -25,4 +25,4 @@ linters:
         - G101
     wrapcheck:
       ignore-package-globs:
-        - "github.com/yourorg/kairos/*"
+        - "github.com/francisguimond/kairos/*"

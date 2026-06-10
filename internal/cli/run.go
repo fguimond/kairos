@@ -10,12 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/yourorg/kairos/internal/api"
-	"github.com/yourorg/kairos/internal/config"
-	"github.com/yourorg/kairos/internal/engine"
-	"github.com/yourorg/kairos/internal/queue"
-	"github.com/yourorg/kairos/internal/service"
-	"github.com/yourorg/kairos/internal/store"
+	"github.com/francisguimond/kairos/internal/api"
+	"github.com/francisguimond/kairos/internal/config"
+	"github.com/francisguimond/kairos/internal/engine"
+	"github.com/francisguimond/kairos/internal/queue"
+	"github.com/francisguimond/kairos/internal/service"
+	"github.com/francisguimond/kairos/internal/store"
 )
 
 func newRunCmd() *cobra.Command {
