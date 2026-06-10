@@ -58,7 +58,7 @@ type Schedule struct {
 	Status         Status          `json:"status"`
 	MaxExecutions  *int64          `json:"max_executions,omitempty"`
 	ExecutionCount int64           `json:"execution_count"`
-	NextRunAt      time.Time       `json:"next_run_at"`
+	NextRunAt      *time.Time      `json:"next_run_at"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 }

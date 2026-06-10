@@ -216,7 +216,7 @@ func TestCreate_CronSetsFieldsCorrectly(t *testing.T) {
 	if got.ExecutionCount != 0 {
 		t.Errorf("expected execution_count 0, got %d", got.ExecutionCount)
 	}
-	if !got.NextRunAt.After(before) {
+	if got.NextRunAt == nil || !got.NextRunAt.After(before) {
 		t.Error("expected NextRunAt to be in the future")
 	}
 	if got.CreatedAt.Before(before) || got.UpdatedAt.Before(before) {
@@ -239,7 +239,7 @@ func TestCreate_IntervalSetsNextRun(t *testing.T) {
 	}
 	lower := before.Add(299 * time.Second)
 	upper := before.Add(301 * time.Second)
-	if got.NextRunAt.Before(lower) || got.NextRunAt.After(upper) {
+	if got.NextRunAt == nil || got.NextRunAt.Before(lower) || got.NextRunAt.After(upper) {
 		t.Errorf("NextRunAt %v outside expected range for 300s interval", got.NextRunAt)
 	}
 }
@@ -595,6 +595,53 @@ func TestUpdate_Status(t *testing.T) {
 	}
 	if got.Status != store.StatusPaused {
 		t.Errorf("expected status paused, got %q", got.Status)
+	}
+	if got.NextRunAt != nil {
+		t.Errorf("expected next_run_at=nil after pause, got %v", got.NextRunAt)
+	}
+}
+
+func TestUpdate_ResumeRecalculatesNextRun(t *testing.T) {
+	paused := baseSchedule()
+	paused.Status = store.StatusPaused
+	paused.NextRunAt = nil
+
+	before := time.Now().UTC()
+	svc := newSvc(&mockStore{
+		getFn:  func(_ context.Context, _ string) (*store.Schedule, error) { return paused, nil },
+		saveFn: func(_ context.Context, _ *store.Schedule) error { return nil },
+	})
+	got, err := svc.Update(context.Background(), "existing-id", store.UpdateScheduleInput{
+		Status: ptr(store.StatusActive),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Status != store.StatusActive {
+		t.Errorf("expected status active, got %q", got.Status)
+	}
+	if got.NextRunAt == nil || !got.NextRunAt.After(before) {
+		t.Errorf("expected next_run_at to be recalculated to a future time, got %v", got.NextRunAt)
+	}
+}
+
+func TestUpdate_ResumeWhenAlreadyActive_DoesNotRecalculate(t *testing.T) {
+	active := baseSchedule()
+	future := time.Now().UTC().Add(time.Hour)
+	active.NextRunAt = &future
+
+	svc := newSvc(&mockStore{
+		getFn:  func(_ context.Context, _ string) (*store.Schedule, error) { return active, nil },
+		saveFn: func(_ context.Context, _ *store.Schedule) error { return nil },
+	})
+	got, err := svc.Update(context.Background(), "existing-id", store.UpdateScheduleInput{
+		Status: ptr(store.StatusActive),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.NextRunAt == nil || !got.NextRunAt.Equal(future) {
+		t.Errorf("expected next_run_at unchanged, got %v", got.NextRunAt)
 	}
 }
 

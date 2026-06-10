@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     status          TEXT        NOT NULL DEFAULT 'active',
     max_executions  BIGINT,
     execution_count BIGINT      NOT NULL DEFAULT 0,
-    next_run_at     TIMESTAMPTZ NOT NULL,
+    next_run_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -233,9 +233,9 @@ func (s *ScheduleStore) List(ctx context.Context, f ListFilter) (*ListResult, er
 func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
 	_, err := s.conn(ctx).Exec(ctx,
 		`UPDATE schedules SET name=$2,description=$3,cron_expr=$4,interval_sec=$5,timezone=$6,
-         payload=$7,status=$8,max_executions=$9,updated_at=$10 WHERE id=$1`,
+         payload=$7,status=$8,max_executions=$9,next_run_at=$10,updated_at=$11 WHERE id=$1`,
 		sch.ID, sch.Name, sch.Description, sch.CronExpr, sch.IntervalSec, sch.Timezone,
-		sch.Payload, sch.Status, sch.MaxExecutions, sch.UpdatedAt,
+		sch.Payload, sch.Status, sch.MaxExecutions, sch.NextRunAt, sch.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("save schedule: %w", err)
@@ -245,7 +245,7 @@ func (s *ScheduleStore) Save(ctx context.Context, sch *Schedule) error {
 
 func (s *ScheduleStore) Delete(ctx context.Context, id string) error {
 	_, err := s.conn(ctx).Exec(ctx,
-		`UPDATE schedules SET status='deleted', updated_at=NOW() WHERE id=$1`, id)
+		`UPDATE schedules SET status='deleted', next_run_at=NULL, updated_at=NOW() WHERE id=$1`, id)
 	if err != nil {
 		return fmt.Errorf("delete schedule: %w", err)
 	}
@@ -285,7 +285,7 @@ func (s *ScheduleStore) DueSchedules(ctx context.Context, limit int) ([]*Schedul
 
 func (s *ScheduleStore) Complete(ctx context.Context, id string, count int64) error {
 	_, err := s.conn(ctx).Exec(ctx,
-		`UPDATE schedules SET status='completed', execution_count=$2, updated_at=NOW() WHERE id=$1`,
+		`UPDATE schedules SET status='completed', next_run_at=NULL, execution_count=$2, updated_at=NOW() WHERE id=$1`,
 		id, count)
 	if err != nil {
 		return fmt.Errorf("complete schedule: %w", err)

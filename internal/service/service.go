@@ -86,7 +86,7 @@ func (s *ScheduleService) Create(ctx context.Context, in store.CreateScheduleInp
 		Payload:       in.Payload,
 		Status:        store.StatusActive,
 		MaxExecutions: in.MaxExecutions,
-		NextRunAt:     nr,
+		NextRunAt:     &nr,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -149,7 +149,17 @@ func (s *ScheduleService) Update(ctx context.Context, id string, in store.Update
 		sch.Payload = *in.Payload
 	}
 	if in.Status != nil {
-		sch.Status = *in.Status
+		newStatus := *in.Status
+		if newStatus == store.StatusActive && sch.Status != store.StatusActive {
+			nr, err := nextRun(sch.CronExpr, sch.IntervalSec, sch.Timezone)
+			if err != nil {
+				return nil, fmt.Errorf("recalculate next run on resume: %w", err)
+			}
+			sch.NextRunAt = &nr
+		} else if newStatus != store.StatusActive {
+			sch.NextRunAt = nil
+		}
+		sch.Status = newStatus
 	}
 	if in.MaxExecutions != nil {
 		sch.MaxExecutions = in.MaxExecutions
