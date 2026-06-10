@@ -69,7 +69,7 @@ func makeSchedule(id, name string, nextRun time.Time) *Schedule {
 		CronExpr:  "* * * * *",
 		Payload:   json.RawMessage(`{}`),
 		Status:    StatusActive,
-		NextRunAt: nextRun,
+		NextRunAt: &nextRun,
 		CreatedAt: t,
 		UpdatedAt: t,
 	}
@@ -247,7 +247,7 @@ func TestInsert_RoundTripsAllFields(t *testing.T) {
 		Status:         StatusActive,
 		MaxExecutions:  &maxEx,
 		ExecutionCount: 7, // ignored by Insert — always stored as 0
-		NextRunAt:      nr,
+		NextRunAt:      &nr,
 		CreatedAt:      created,
 		UpdatedAt:      created,
 	}
@@ -283,7 +283,7 @@ func TestInsert_RoundTripsAllFields(t *testing.T) {
 	if got.ExecutionCount != 0 {
 		t.Errorf("ExecutionCount: Insert always stores 0, got %d", got.ExecutionCount)
 	}
-	if !got.NextRunAt.Equal(nr) {
+	if got.NextRunAt == nil || !got.NextRunAt.Equal(nr) {
 		t.Errorf("NextRunAt: want %v, got %v", nr, got.NextRunAt)
 	}
 	if !got.CreatedAt.Equal(created) {
@@ -465,7 +465,7 @@ func TestList_OrderedByNextRunAtAsc(t *testing.T) {
 		t.Fatalf("expected 3 schedules, got %d", len(got))
 	}
 	for i := 1; i < len(got); i++ {
-		if got[i].NextRunAt.Before(got[i-1].NextRunAt) {
+		if got[i].NextRunAt == nil || got[i-1].NextRunAt == nil || got[i].NextRunAt.Before(*got[i-1].NextRunAt) {
 			t.Errorf("List is not ordered by next_run_at: index %d (%v) is before index %d (%v)",
 				i, got[i].NextRunAt, i-1, got[i-1].NextRunAt)
 		}
@@ -701,7 +701,7 @@ func TestSave_UpdatesAllMutableFields(t *testing.T) {
 		Payload:       json.RawMessage(`{"updated":true}`),
 		Status:        StatusPaused,
 		MaxExecutions: &maxEx,
-		NextRunAt:     newNext,
+		NextRunAt:     &newNext,
 		UpdatedAt:     now(),
 	}
 
@@ -728,6 +728,9 @@ func TestSave_UpdatesAllMutableFields(t *testing.T) {
 	}
 	if got.MaxExecutions == nil || *got.MaxExecutions != 5 {
 		t.Errorf("MaxExecutions: want 5, got %v", got.MaxExecutions)
+	}
+	if got.NextRunAt == nil || !got.NextRunAt.Equal(newNext) {
+		t.Errorf("NextRunAt: want %v, got %v", newNext, got.NextRunAt)
 	}
 	if !got.UpdatedAt.Equal(updated.UpdatedAt) {
 		t.Errorf("UpdatedAt: want %v, got %v", updated.UpdatedAt, got.UpdatedAt)
@@ -795,6 +798,9 @@ func TestDelete_SetsStatusDeletedAndUpdatedAt(t *testing.T) {
 	got, _ := s.Get(context.Background(), "del-id")
 	if got.Status != StatusDeleted {
 		t.Errorf("expected status deleted, got %q", got.Status)
+	}
+	if got.NextRunAt != nil {
+		t.Errorf("expected next_run_at=NULL after Delete, got %v", got.NextRunAt)
 	}
 	if got.UpdatedAt.Before(beforeDelete.Add(-time.Second)) {
 		t.Errorf("UpdatedAt not refreshed: got %v, delete happened after %v", got.UpdatedAt, beforeDelete)
@@ -908,7 +914,7 @@ func TestDueSchedules_OrderedByNextRunAtAsc(t *testing.T) {
 		t.Fatalf("DueSchedules: %v", err)
 	}
 	for i := 1; i < len(got); i++ {
-		if got[i].NextRunAt.Before(got[i-1].NextRunAt) {
+		if got[i].NextRunAt == nil || got[i-1].NextRunAt == nil || got[i].NextRunAt.Before(*got[i-1].NextRunAt) {
 			t.Errorf("DueSchedules not ordered: index %d (%v) before index %d (%v)",
 				i, got[i].NextRunAt, i-1, got[i-1].NextRunAt)
 		}
@@ -966,6 +972,9 @@ func TestComplete_SetsStatusAndCount(t *testing.T) {
 	if got.Status != StatusCompleted {
 		t.Errorf("expected status completed, got %q", got.Status)
 	}
+	if got.NextRunAt != nil {
+		t.Errorf("expected next_run_at=NULL after Complete, got %v", got.NextRunAt)
+	}
 	if got.ExecutionCount != 7 {
 		t.Errorf("expected execution_count 7, got %d", got.ExecutionCount)
 	}
@@ -1017,7 +1026,7 @@ func TestSetNextRun_UpdatesNextRunAtAndCount(t *testing.T) {
 	}
 
 	got, _ := s.Get(context.Background(), "next-id")
-	if !got.NextRunAt.Equal(newNext) {
+	if got.NextRunAt == nil || !got.NextRunAt.Equal(newNext) {
 		t.Errorf("NextRunAt: want %v, got %v", newNext, got.NextRunAt)
 	}
 	if got.ExecutionCount != 3 {
