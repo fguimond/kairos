@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
-	"github.com/yourorg/kairos/internal/store"
+	"github.com/francisguimond/kairos/internal/store"
 )
 
 // Store is the data-access interface the service depends on.

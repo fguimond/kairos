@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/yourorg/kairos/internal/version"
+	"github.com/francisguimond/kairos/internal/version"
 )
 
 func newVersionCmd() *cobra.Command {

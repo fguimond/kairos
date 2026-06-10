@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourorg/kairos/internal/store"
+	"github.com/francisguimond/kairos/internal/store"
 )
 
 // --- mock store ---

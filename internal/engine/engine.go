@@ -7,7 +7,7 @@ import (
 
 	"log/slog"
 
-	"github.com/yourorg/kairos/internal/store"
+	"github.com/francisguimond/kairos/internal/store"
 )
 
 // Publisher is the interface the engine uses to fire a trigger event.

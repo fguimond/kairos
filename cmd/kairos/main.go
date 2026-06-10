@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/yourorg/kairos/internal/cli"
+	"github.com/francisguimond/kairos/internal/cli"
 )
 
 func main() {

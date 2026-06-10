@@ -18,7 +18,7 @@ go run ./cmd/kairos run
 # Build binary
 go build -o kairos ./cmd/kairos
 
-# Print version (use -ldflags "-X github.com/yourorg/kairos/internal/version.Version=<tag>" to inject a release version)
+# Print version (use -ldflags "-X github.com/francisguimond/kairos/internal/version.Version=<tag>" to inject a release version)
 go run ./cmd/kairos version
 
 # Run all unit tests

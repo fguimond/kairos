@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/yourorg/kairos/internal/config"
+	"github.com/francisguimond/kairos/internal/config"
 )
 
 // resolveConfig runs the run command's flag binding + viper resolution without
