@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/fguimond/kairos/compare/v0.3.0...v0.3.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* publish Docker image from release-please workflow ([#54](https://github.com/fguimond/kairos/issues/54)) ([bdb39cf](https://github.com/fguimond/kairos/commit/bdb39cf8493ede8e3c195ab97cc37078572b84ed))
+
 ## [0.3.0](https://github.com/fguimond/kairos/compare/v0.2.0...v0.3.0) (2026-06-10)
 
 
