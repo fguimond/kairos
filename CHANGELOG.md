@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/fguimond/kairos/compare/v0.2.0...v0.3.0) (2026-06-10)
+
+
+### Features
+
+* add filtering support to GET /api/v1/schedules ([#41](https://github.com/fguimond/kairos/issues/41)) ([4922af5](https://github.com/fguimond/kairos/commit/4922af503d4d82761320d45289ac553674587768))
+* add pagination support to GET /api/v1/schedules ([d220154](https://github.com/fguimond/kairos/commit/d220154862df072785cb048fff8d416f00d1e6cf))
+* add sorting support to GET /api/v1/schedules ([#43](https://github.com/fguimond/kairos/issues/43)) ([8181729](https://github.com/fguimond/kairos/commit/81817297f4961adec9a9dee54ed1edf54873dd92))
+
+
+### Bug Fixes
+
+* null out next_run_at for non-active schedules ([#48](https://github.com/fguimond/kairos/issues/48)) ([937875b](https://github.com/fguimond/kairos/commit/937875b2cb04ae66bce9120673a768670d5e113c))
+
 ## [0.2.0](https://github.com/fguimond/kairos/compare/v0.1.0...v0.2.0) (2026-06-04)
 
 
