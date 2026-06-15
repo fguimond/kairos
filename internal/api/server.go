@@ -78,6 +78,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// Handler returns the configured HTTP handler (routes plus middleware). It is
+// useful for mounting the API inside a larger server or for testing with
+// httptest.
+func (s *Server) Handler() http.Handler {
+	return s.srv.Handler
+}
+
 // --- handlers ---
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
