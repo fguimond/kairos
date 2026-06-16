@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/fguimond/kairos/compare/v0.3.1...v0.4.0) (2026-06-16)
+
+
+### Features
+
+* add standalone Go client library ([#56](https://github.com/fguimond/kairos/issues/56)) ([856b125](https://github.com/fguimond/kairos/commit/856b125bf5cf048a31e868793f35e0b9b3bc79e6))
+
+
+### Miscellaneous Chores
+
+* bump all Go dependencies ([#64](https://github.com/fguimond/kairos/issues/64)) ([7eb87da](https://github.com/fguimond/kairos/commit/7eb87daafa3e85b3c818ee571b4735055d1c9b6c))
+* bump runtime base image to alpine:3.24 ([#58](https://github.com/fguimond/kairos/issues/58)) ([505dc50](https://github.com/fguimond/kairos/commit/505dc5004b23f495d564c95bbbe3f35b01c2e256))
+* **deps:** update rabbitmq docker tag to v4 ([#62](https://github.com/fguimond/kairos/issues/62)) ([2aa0743](https://github.com/fguimond/kairos/commit/2aa074348b9364759bf917c7889fd1b6c9adf750))
+* enable Renovate for dependency updates ([#60](https://github.com/fguimond/kairos/issues/60)) ([0076963](https://github.com/fguimond/kairos/commit/0076963402b06000fa1a8a344d8d912ce0d366e3))
+
+
+### Continuous Integration
+
+* include chores and ci commits in release-please changelog ([#65](https://github.com/fguimond/kairos/issues/65)) ([aa80f9e](https://github.com/fguimond/kairos/commit/aa80f9e94b2261ae03eed345f2cc2ffb83fd1985))
+
 ## [0.3.1](https://github.com/fguimond/kairos/compare/v0.3.0...v0.3.1) (2026-06-11)
 
 
