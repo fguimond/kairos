@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/fguimond/kairos/compare/v0.4.0...v0.4.1) (2026-06-22)
+
+
+### Miscellaneous Chores
+
+* **deps:** update actions/checkout action to v7 ([#67](https://github.com/fguimond/kairos/issues/67)) ([f2a4df7](https://github.com/fguimond/kairos/commit/f2a4df786226ecf9a35f1afb28540056e260a898))
+
 ## [0.4.0](https://github.com/fguimond/kairos/compare/v0.3.1...v0.4.0) (2026-06-16)
 
 
